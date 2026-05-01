@@ -35,7 +35,7 @@ let activeFilter = 'all';
 let activeMonth = '';
 
 // ── HELPERS ──────────────────────────────────────────────────
-const fmt = (n) => '$' + Number(n).toFixed(2);
+const fmt = (n) => '₹' + Number(n).toFixed(2);
 
 function getMonths() {
   const set = new Set(expenses.map(e => e.date.slice(0, 7)));
