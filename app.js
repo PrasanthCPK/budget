@@ -231,7 +231,7 @@ function drawSimpleChart(canvas, ctx, dates, amounts) {
     ctx.fillStyle = '#7a7a90';
     ctx.font = `${11 * 1}px DM Sans`;
     ctx.textAlign = 'right';
-    ctx.fillText('$' + val.toFixed(0), PAD.left - 6, y + 4);
+    ctx.fillText('₹' + val.toFixed(0), PAD.left - 6, y + 4);
   }
 
   // Gradient fill
