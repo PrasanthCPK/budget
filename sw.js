@@ -5,11 +5,11 @@
 
 const CACHE = 'budget-v1';
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/style.css',
-  '/app.js',
-  '/manifest.json',
+  '/budget/',
+  '/budget/index.html',
+  '/budget/style.css',
+  '/budget/app.js',
+  '/budget/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   'https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap',
