@@ -15,7 +15,7 @@
 </head>
 <body>
 
-  <!-- SPLASH / HEADER -->
+  <!-- HEADER -->
   <header class="app-header">
     <div class="header-inner">
       <div class="header-top">
@@ -42,9 +42,13 @@
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
       Stats
     </button>
+    <button class="tab-btn" data-tab="data">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+      Data
+    </button>
   </nav>
 
-  <!-- MAIN CONTENT -->
+  <!-- MAIN -->
   <main class="main-content">
 
     <!-- EXPENSES TAB -->
@@ -82,17 +86,122 @@
           <span class="stat-value" id="statMax">₹0.00</span>
         </div>
       </div>
-
       <h2 class="section-heading">By Category</h2>
       <div id="categoryBars" class="category-bars"></div>
-
       <h2 class="section-heading">Spending Over Time</h2>
       <div class="chart-wrap">
         <canvas id="lineChart"></canvas>
       </div>
     </section>
 
+    <!-- DATA TAB -->
+    <section id="tab-data" class="tab-panel">
+
+      <!-- LOCAL BACKUP -->
+      <div class="data-section">
+        <div class="data-section-header">
+          <span class="data-section-icon">💾</span>
+          <div>
+            <div class="data-section-title">Local Backup</div>
+            <div class="data-section-sub">Export data as a file · save to Google Drive or Files</div>
+          </div>
+        </div>
+        <div class="data-actions">
+          <button class="data-btn primary" id="exportBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export to File
+          </button>
+          <button class="data-btn" id="importBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><line x1="12" y1="3" x2="12" y2="15"/><polyline points="7 8 12 3 17 8"/></svg>
+            Import from File
+          </button>
+        </div>
+        <div class="data-info-box">
+          <strong>How to save to Google Drive:</strong><br/>
+          Tap <em>Export to File</em> → the file downloads → tap the download icon in Safari's toolbar → tap the file → tap Share → Save to Drive.
+        </div>
+        <input type="file" id="importFileInput" accept=".json" style="display:none" />
+      </div>
+
+      <!-- GOOGLE SHEETS SYNC -->
+      <div class="data-section">
+        <div class="data-section-header">
+          <span class="data-section-icon">📊</span>
+          <div>
+            <div class="data-section-title">Google Sheets Sync</div>
+            <div class="data-section-sub">Sync privately to your own Google Sheet</div>
+          </div>
+        </div>
+        <div class="data-actions">
+          <button class="data-btn primary" id="syncPushBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+            Push to Sheets
+          </button>
+          <button class="data-btn" id="syncPullBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+            Pull from Sheets
+          </button>
+        </div>
+        <div class="sheets-url-group">
+          <label class="form-label">Apps Script Web App URL</label>
+          <input class="form-input" type="url" id="sheetsUrl" placeholder="https://script.google.com/macros/s/..." />
+          <button class="save-url-btn" id="saveUrlBtn">Save URL</button>
+        </div>
+        <button class="setup-toggle" id="setupToggle">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          How to set up Google Sheets sync
+        </button>
+        <div class="setup-steps" id="setupSteps" style="display:none">
+          <ol class="steps-list">
+            <li>Go to <strong>sheets.google.com</strong> → create a new blank spreadsheet → name it <strong>Budget App</strong></li>
+            <li>Click <strong>Extensions → Apps Script</strong></li>
+            <li>Delete any existing code and paste the full contents of <strong>apps-script.gs</strong> (included in your ZIP)</li>
+            <li>Click <strong>Deploy → New deployment</strong></li>
+            <li>Set type: <strong>Web app</strong></li>
+            <li>Set <em>Execute as</em>: <strong>Me</strong> and <em>Who has access</em>: <strong>Only myself</strong></li>
+            <li>Click <strong>Deploy</strong>, authorise when prompted, then copy the Web App URL</li>
+            <li>Paste the URL in the field above and tap <strong>Save URL</strong></li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- STORAGE INFO -->
+      <div class="data-section">
+        <div class="data-section-header">
+          <span class="data-section-icon">🗂️</span>
+          <div>
+            <div class="data-section-title">Storage Info</div>
+            <div class="data-section-sub">All data lives locally on this device</div>
+          </div>
+        </div>
+        <div class="storage-info">
+          <div class="storage-row"><span>Total entries</span><span id="storageCount">0</span></div>
+          <div class="storage-row"><span>Oldest entry</span><span id="storageOldest">—</span></div>
+          <div class="storage-row"><span>Newest entry</span><span id="storageNewest">—</span></div>
+          <div class="storage-row"><span>Last exported</span><span id="lastExported">Never</span></div>
+          <div class="storage-row"><span>Last synced</span><span id="lastSynced">Never</span></div>
+        </div>
+        <button class="data-btn danger" id="clearDataBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+          Clear All Data
+        </button>
+      </div>
+
+    </section>
   </main>
+
+  <!-- CONFIRM MODAL -->
+  <div class="modal-overlay" id="confirmOverlay">
+    <div class="modal confirm-modal">
+      <div class="confirm-icon" id="confirmIcon">⚠️</div>
+      <h2 class="modal-title" id="confirmTitle">Are you sure?</h2>
+      <p class="confirm-msg" id="confirmMsg">This cannot be undone.</p>
+      <div class="confirm-actions">
+        <button class="data-btn" id="confirmCancelBtn">Cancel</button>
+        <button class="data-btn danger" id="confirmOkBtn">Confirm</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ADD EXPENSE MODAL -->
   <div class="modal-overlay" id="modalOverlay">
@@ -103,27 +212,22 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
-
       <div class="form-group">
         <label class="form-label">Title</label>
         <input class="form-input" type="text" id="expTitle" placeholder="e.g. Grocery run" autocomplete="off" />
       </div>
-
       <div class="form-group">
         <label class="form-label">Amount (₹)</label>
         <input class="form-input amount-input" type="number" id="expAmount" placeholder="0.00" min="0" step="0.01" inputmode="decimal" />
       </div>
-
       <div class="form-group">
         <label class="form-label">Date</label>
         <input class="form-input" type="date" id="expDate" />
       </div>
-
       <div class="form-group">
         <label class="form-label">Category</label>
         <div class="category-grid" id="categoryGrid"></div>
       </div>
-
       <button class="save-btn" id="saveBtn">Save Expense</button>
     </div>
   </div>
