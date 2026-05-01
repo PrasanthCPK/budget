@@ -2,7 +2,7 @@
   "name": "Budget.",
   "short_name": "Budget",
   "description": "A lightweight personal expense tracker",
-  "start_url": "/",
+  "start_url": "/budget/",
   "display": "standalone",
   "background_color": "#0a0a0f",
   "theme_color": "#0a0a0f",
