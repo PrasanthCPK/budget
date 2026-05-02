@@ -44,18 +44,17 @@ function normaliseDate(raw) {
   // Already correct: YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
 
-  // Try to extract YYYY-MM-DD directly from longer strings
-  // e.g. 'Sat May 02 2026 00:00:00 GMT+0530 (India Standard Time)'
+  // Extract YYYY-MM-DD from ISO strings like '2026-05-03T00:00:00.000Z'
   const isoMatch = s.match(/(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
 
-  // Try parsing as a Date object and use UTC methods to avoid timezone shift
+  // Handle long date strings e.g. 'Sat May 02 2026 00:00:00 GMT+0530 (IST)'
+  // Use LOCAL date methods — never UTC — to avoid day shift in IST
   const d = new Date(s);
   if (!isNaN(d.getTime())) {
-    // Use UTC to avoid date shifting due to timezone offset
-    const y   = d.getUTCFullYear();
-    const m   = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(d.getUTCDate()).padStart(2, '0');
+    const y   = d.getFullYear();
+    const m   = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   }
 

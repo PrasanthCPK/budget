@@ -52,17 +52,23 @@ function pushAll(expenses, archived) {
     sheet.getRange(2, 1, rows.length, HEADERS.length).setValues(rows);
   }
 
+  // Force date column (col 5 = E) to plain text so Sheets won't convert it
+  if (rows.length > 0) {
+    sheet.getRange(2, 5, rows.length, 1).setNumberFormat('@STRING@');
+  }
   sheet.autoResizeColumns(1, HEADERS.length);
   return jsonResponse({ status: 'ok', expenses: expenses.length, archived: archived.length });
 }
 
 function rowFor(e, archivedFlag, now) {
+  // Store date as plain text by prepending apostrophe — prevents Sheets auto-converting to a date serial
+  const dateStr = String(e.date || '').substring(0, 10);
   return [
     e.id       || '',
     e.title    || '',
     Number(e.amount) || 0,
     e.category || '',
-    e.date     || '',
+    dateStr,
     now,
     archivedFlag,
   ];
@@ -81,12 +87,20 @@ function pull() {
   const archived = [];
 
   rows.filter(r => r[0]).forEach(r => {
+    // Format date explicitly as YYYY-MM-DD string
+    // Sheets may return date cells as Date objects — use Utilities to format safely
+    let dateVal = r[4];
+    if (dateVal instanceof Date) {
+      dateVal = Utilities.formatDate(dateVal, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    } else {
+      dateVal = String(dateVal).substring(0, 10); // take first 10 chars: YYYY-MM-DD
+    }
     const entry = {
       id:       String(r[0]),
       title:    String(r[1]),
       amount:   Number(r[2]),
       category: String(r[3]),
-      date:     String(r[4]),
+      date:     dateVal,
     };
     String(r[6]).toLowerCase() === 'yes'
       ? archived.push(entry)
