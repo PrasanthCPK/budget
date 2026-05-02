@@ -42,7 +42,7 @@ body.light {
   --text-muted: #8a8070;
   --danger: #cc4444;
   --success: #3a9060;
-  --header-grad: linear-gradient(160deg, #2d1f4a 0%, #1a1030 100%);
+  --header-grad: linear-gradient(160deg, #422f6a 0%, #1a1030 100%);
   --accent-bg: #fdf8e8;
   --accent-border: #d4a02040;
   --btn-text: #ffffff;
