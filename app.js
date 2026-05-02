@@ -614,12 +614,13 @@ function showToast(msg, type = '') {
 function showToastWithUndo(msg, onUndo) {
   const el = document.getElementById('toast');
   el.innerHTML = escHtml(msg) +
-    ' <button class="toast-undo" id="toastUndoBtn">Undo</button>';
+    ' <button class="toast-undo">Undo</button>';
   el.className = 'toast';
   el.style.visibility = 'visible';
   el.classList.add('show');
   clearTimeout(el._hideTimer);
-  document.getElementById('toastUndoBtn').addEventListener('click', () => {
+  // Use querySelector on the toast element — safe because innerHTML is already set
+  el.querySelector('.toast-undo').addEventListener('click', () => {
     el.classList.remove('show');
     setTimeout(() => { el.style.visibility = 'hidden'; }, 350);
     clearTimeout(el._hideTimer);
@@ -637,15 +638,20 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
 const escHtml = s => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 // ── EVENTS ────────────────────────────────────────────────────
+// Safe addEventListener — skips silently if element doesn't exist
+function on(id, event, fn) {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener(event, fn);
+}
 
 // Add expense
-document.getElementById('openAddBtn').addEventListener('click', openModal);
-document.getElementById('closeModalBtn').addEventListener('click', closeModal);
-document.getElementById('saveBtn').addEventListener('click', saveExpense);
-document.getElementById('modalOverlay').addEventListener('click', e => {
+on('openAddBtn', 'click', openModal);
+on('closeModalBtn', 'click', closeModal);
+on('saveBtn', 'click', saveExpense);
+on('modalOverlay', 'click', e => {
   if (e.target === document.getElementById('modalOverlay')) closeModal();
 });
-document.getElementById('expAmount').addEventListener('keydown', e => {
+on('expAmount', 'keydown', e => {
   if (e.key === 'Enter') saveExpense();
 });
 
@@ -661,17 +667,17 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
-document.getElementById('monthFilter').addEventListener('change', e => {
+on('monthFilter', 'change', e => {
   activeMonth = e.target.value; renderAll();
 });
 
 // Data tab
-document.getElementById('exportBtn').addEventListener('click', exportData);
-document.getElementById('importBtn').addEventListener('click', triggerImport);
-document.getElementById('importFileInput').addEventListener('change', handleImportFile);
-document.getElementById('syncPullBtn').addEventListener('click', pullFromSheets);
+on('exportBtn', 'click', exportData);
+on('importBtn', 'click', triggerImport);
+on('importFileInput', 'change', handleImportFile);
+on('syncPullBtn', 'click', pullFromSheets);
 
-document.getElementById('saveUrlBtn').addEventListener('click', () => {
+on('saveUrlBtn', 'click', () => {
   const url = document.getElementById('sheetsUrl').value.trim();
   if (!url.startsWith('https://script.google.com')) {
     showToast('Please paste a valid Apps Script URL', 'error'); return;
@@ -680,12 +686,12 @@ document.getElementById('saveUrlBtn').addEventListener('click', () => {
   showToast('URL saved ✓', 'success');
 });
 
-document.getElementById('setupToggle').addEventListener('click', () => {
+on('setupToggle', 'click', () => {
   const el = document.getElementById('setupSteps');
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 });
 
-document.getElementById('clearDataBtn').addEventListener('click', () => {
+on('clearDataBtn', 'click', () => {
   showConfirm('🗑️ Clear All Data', `This will permanently delete all ${expenses.length} expense(s). This cannot be undone.`, () => {
     expenses = [];
     archived = [];
@@ -698,8 +704,8 @@ document.getElementById('clearDataBtn').addEventListener('click', () => {
 });
 
 // Confirm modal
-document.getElementById('confirmCancelBtn').addEventListener('click', closeConfirm);
-document.getElementById('confirmOverlay').addEventListener('click', e => {
+on('confirmCancelBtn', 'click', closeConfirm);
+on('confirmOverlay', 'click', e => {
   if (e.target === document.getElementById('confirmOverlay')) closeConfirm();
 });
 
@@ -728,10 +734,10 @@ function toggleTheme() {
   applyTheme(current === 'dark' ? 'light' : 'dark');
 }
 
-document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
+on('themeToggleBtn', 'click', toggleTheme);
 
 // Archive panel toggle
-document.getElementById('archiveToggleBtn').addEventListener('click', () => {
+on('archiveToggleBtn', 'click', () => {
   const panel = document.getElementById('archivePanel');
   const isOpen = panel.style.display !== 'none';
   panel.style.display = isOpen ? 'none' : 'block';
