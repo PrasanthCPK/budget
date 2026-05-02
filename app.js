@@ -13,9 +13,13 @@ function initTheme() {
 
 function applyTheme(mode) {
   const isLight = mode === 'light';
+  // Apply to both <html> and <body> so overscroll area also gets the bg colour
+  document.documentElement.classList.toggle('light', isLight);
   document.body.classList.toggle('light', isLight);
-  const btn = document.getElementById('themeToggleBtn');
-  if (btn) btn.textContent = isLight ? '☀️' : '🌙';
+  const darkIcon  = document.getElementById('themeIconDark');
+  const lightIcon = document.getElementById('themeIconLight');
+  if (darkIcon)  darkIcon.style.display  = isLight ? 'none'  : 'block';
+  if (lightIcon) lightIcon.style.display = isLight ? 'block' : 'none';
   LS.set('budget_theme', mode);
 }
 
@@ -78,6 +82,7 @@ const LS = {
 
 // ── STATE ────────────────────────────────────────────────────
 let expenses        = LS.get('budget_expenses', []).map(e => ({ ...e, date: normaliseDate(e.date) }));
+let archived        = LS.get('budget_archived', []).map(e => ({ ...e, date: normaliseDate(e.date) }));
 let selectedCat     = CATEGORIES[0].id;
 let editingId       = null;  // null = adding new, string = editing existing
 
@@ -150,7 +155,7 @@ function renderExpenses() {
     }).join('');
   }).join('');
   container.querySelectorAll('.delete-btn').forEach(btn =>
-    btn.addEventListener('click', () => deleteExpense(btn.dataset.id)));
+    btn.addEventListener('click', () => archiveExpense(btn.dataset.id)));
   container.querySelectorAll('.edit-btn').forEach(btn =>
     btn.addEventListener('click', () => openEditModal(btn.dataset.id)));
 }
@@ -269,6 +274,7 @@ function renderAll() {
   renderMonthFilter();
   renderExpenses();
   renderDataTab();
+  updateArchiveBadge();
 }
 
 // ── ADD EXPENSE ───────────────────────────────────────────────
@@ -342,11 +348,86 @@ function saveExpense() {
   }
 }
 
-function deleteExpense(id) {
+function archiveExpense(id) {
+  const expense = expenses.find(e => e.id === id);
+  if (!expense) return;
+  archived.unshift({ ...expense, archivedAt: todayStr() });
   expenses = expenses.filter(e => e.id !== id);
   LS.set('budget_expenses', expenses);
+  LS.set('budget_archived', archived);
   renderAll();
-  showToast('Deleted');
+  // Show toast with undo option
+  showToastWithUndo('Expense archived', () => {
+    expenses.unshift(expense);
+    archived = archived.filter(e => e.id !== id);
+    LS.set('budget_expenses', expenses);
+    LS.set('budget_archived', archived);
+    renderAll();
+  });
+}
+
+function restoreExpense(id) {
+  const expense = archived.find(e => e.id === id);
+  if (!expense) return;
+  const { archivedAt, ...clean } = expense;
+  expenses.unshift(clean);
+  archived = archived.filter(e => e.id !== id);
+  LS.set('budget_expenses', expenses);
+  LS.set('budget_archived', archived);
+  renderArchive();
+  renderAll();
+  showToast('Restored ✓', 'success');
+}
+
+function deleteArchived(id) {
+  archived = archived.filter(e => e.id !== id);
+  LS.set('budget_archived', archived);
+  renderArchive();
+  updateArchiveBadge();
+  showToast('Permanently deleted');
+}
+
+function renderArchive() {
+  const container = document.getElementById('archiveList');
+  if (!container) return;
+  updateArchiveBadge();
+  if (archived.length === 0) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🗃️</div><p>No archived expenses.</p></div>`;
+    return;
+  }
+  container.innerHTML = archived.map(e => {
+    const cat = CATEGORIES.find(c => c.id === e.category) || CATEGORIES[CATEGORIES.length - 1];
+    return `<div class="expense-item">
+      <div class="expense-emoji">${cat.emoji}</div>
+      <div class="expense-info">
+        <div class="expense-title">${escHtml(e.title)}</div>
+        <div class="expense-cat">${cat.label} · ${fmtDate(e.date)}</div>
+      </div>
+      <div class="expense-right">
+        <span class="expense-amount">${fmt(e.amount)}</span>
+        <div class="item-actions">
+          <button class="edit-btn" data-id="${e.id}" aria-label="Restore" title="Restore">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+          </button>
+          <button class="delete-btn" data-id="${e.id}" aria-label="Delete permanently">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  container.querySelectorAll('.edit-btn').forEach(btn =>
+    btn.addEventListener('click', () => restoreExpense(btn.dataset.id)));
+  container.querySelectorAll('.delete-btn').forEach(btn =>
+    btn.addEventListener('click', () => deleteArchived(btn.dataset.id)));
+}
+
+function updateArchiveBadge() {
+  const badge = document.getElementById('archiveBadge');
+  if (badge) {
+    badge.textContent = archived.length;
+    badge.style.display = archived.length > 0 ? 'inline-flex' : 'none';
+  }
 }
 
 // ── EXPORT ────────────────────────────────────────────────────
@@ -414,9 +495,10 @@ async function pushToSheets() {
   btn.innerHTML = '<span class="spinning">↻</span> Pushing...';
 
   try {
-    // Send data as a GET request with encoded payload to avoid CORS preflight issues
+    // Send both active and archived expenses
     const payload = encodeURIComponent(JSON.stringify(expenses));
-    const res = await fetch(url + '?action=push&data=' + payload, {
+    const archPayload = encodeURIComponent(JSON.stringify(archived));
+    const res = await fetch(url + '?action=push&data=' + payload + '&arch=' + archPayload, {
       method: 'GET',
       redirect: 'follow',
     });
@@ -425,7 +507,7 @@ async function pushToSheets() {
       const ts = new Date().toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
       LS.set('budget_last_sync', ts);
       renderDataTab();
-      showToast(`Pushed ${expenses.length} entries to Sheets ✓`, 'success');
+      showToast(`Pushed ${expenses.length} active + ${archived.length} archived ✓`, 'success');
     } else {
       showToast('Sheets error: ' + (json.message || 'unknown'), 'error');
     }
@@ -451,28 +533,37 @@ async function pullFromSheets() {
     if (json.status === 'ok' && Array.isArray(json.expenses)) {
       showConfirm(
         '📥 Pull from Sheets',
-        `Found ${json.expenses.length} expense(s) in your Sheet. Existing entries will be updated and new ones added.`,
+        `Found ${json.expenses.length} active + ${(json.archived||[]).length} archived. Local data will be updated.`,
         () => {
-          const incoming = json.expenses.map(e => ({ ...e, date: normaliseDate(e.date) }));
+          // ── Active expenses: update existing, add new ──
+          const incoming    = json.expenses.map(e => ({ ...e, date: normaliseDate(e.date) }));
           const incomingMap = new Map(incoming.map(e => [e.id, e]));
-          // Update existing entries with sheet data, keep local-only entries
-          let updatedCount = 0;
+          let updatedCount  = 0;
           const merged = expenses.map(e => {
-            if (incomingMap.has(e.id)) {
-              updatedCount++;
-              return { ...e, ...incomingMap.get(e.id) };
-            }
+            if (incomingMap.has(e.id)) { updatedCount++; return { ...e, ...incomingMap.get(e.id) }; }
             return e;
           });
-          // Add brand-new entries from sheet not present locally
           const localIds = new Set(expenses.map(e => e.id));
           const brandNew = incoming.filter(e => !localIds.has(e.id));
           expenses = [...merged, ...brandNew].sort((a, b) => b.date.localeCompare(a.date));
+
+          // ── Archived expenses: same merge logic ──
+          const incomingArch    = (json.archived || []).map(e => ({ ...e, date: normaliseDate(e.date) }));
+          const incomingArchMap = new Map(incomingArch.map(e => [e.id, e]));
+          const mergedArch = archived.map(e =>
+            incomingArchMap.has(e.id) ? { ...e, ...incomingArchMap.get(e.id) } : e
+          );
+          const localArchIds = new Set(archived.map(e => e.id));
+          const brandNewArch = incomingArch.filter(e => !localArchIds.has(e.id));
+          archived = [...mergedArch, ...brandNewArch].sort((a, b) => b.date.localeCompare(a.date));
+
           LS.set('budget_expenses', expenses);
+          LS.set('budget_archived', archived);
           const ts = new Date().toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
           LS.set('budget_last_sync', ts);
           renderAll();
-          showToast(`${brandNew.length} new · ${updatedCount} updated ✓`, 'success');
+          renderArchive();
+          showToast(`${brandNew.length} new · ${updatedCount} updated · ${brandNewArch.length} archived synced ✓`, 'success');
         }
       );
     } else {
@@ -608,6 +699,14 @@ function toggleTheme() {
 }
 
 document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
+
+// Archive panel toggle
+document.getElementById('archiveToggleBtn').addEventListener('click', () => {
+  const panel = document.getElementById('archivePanel');
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) renderArchive();
+});
 
 // ── SERVICE WORKER ────────────────────────────────────────────
 if ('serviceWorker' in navigator) {

@@ -71,6 +71,18 @@
           <p>No expenses yet.<br/>Tap <strong>+</strong> to add one.</p>
         </div>
       </div>
+
+      <!-- ARCHIVE -->
+      <div class="archive-header">
+        <button class="archive-toggle-btn" id="archiveToggleBtn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+          Archived
+          <span class="archive-badge" id="archiveBadge" style="display:none">0</span>
+        </button>
+      </div>
+      <div id="archivePanel" class="archive-panel" style="display:none">
+        <div id="archiveList"></div>
+      </div>
     </section>
 
     <!-- STATS TAB -->

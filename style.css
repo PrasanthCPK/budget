@@ -27,6 +27,9 @@
 }
 
 /* ── LIGHT MODE ──────────────────────────────────────────── */
+/* Light mode — applied to <html> so overscroll bg is also light */
+html.light,
+html.light body,
 body.light {
   --bg: #f5f4f0;
   --surface: #ffffff;
@@ -39,10 +42,19 @@ body.light {
   --text-muted: #8a8070;
   --danger: #cc4444;
   --success: #3a9060;
-  --header-grad: linear-gradient(160deg, #422f6a 0%, #1a1030 100%);
+  --header-grad: linear-gradient(160deg, #2d1f4a 0%, #1a1030 100%);
   --accent-bg: #fdf8e8;
   --accent-border: #d4a02040;
   --btn-text: #ffffff;
+}
+
+/* Prevent system dark mode from overriding user's explicit light choice */
+@media (prefers-color-scheme: dark) {
+  html.light,
+  html.light body {
+    background: #f5f4f0;
+    color: #1a1814;
+  }
 }
 
 /* Smooth transition when toggling */
@@ -54,14 +66,8 @@ body, body * {
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html {
+html, body {
   height: 100%;
-  background: var(--bg);
-  /* Ensures overscroll area matches app background on iOS/Android */
-}
-
-body {
-  min-height: 100%;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-body);
@@ -626,6 +632,67 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); }
 .color-6 { background: linear-gradient(90deg, #60e0e0, #40c0b0); }
 .color-7 { background: linear-gradient(90deg, #f0f060, #d0c040); }
 .color-8 { background: linear-gradient(90deg, #e080c0, #c06090); }
+
+
+/* ── ARCHIVE ─────────────────────────────────────────────── */
+.archive-header {
+  padding: 8px 16px 4px;
+}
+
+.archive-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.2s;
+}
+.archive-toggle-btn:active { background: var(--surface2); }
+
+.archive-badge {
+  background: var(--text-muted);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.archive-panel {
+  padding: 0 16px 24px;
+  animation: slideIn 0.2s ease;
+}
+
+/* ── TOAST UNDO BUTTON ───────────────────────────────────── */
+.toast-undo {
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  color: inherit;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  margin-left: 8px;
+  cursor: pointer;
+  opacity: 0.85;
+  vertical-align: middle;
+  -webkit-tap-highlight-color: transparent;
+}
+.toast-undo:active { opacity: 1; }
 
 /* ── SYNC SPINNER ────────────────────────────────────────── */
 .spinning { animation: spin 1s linear infinite; display: inline-block; }
