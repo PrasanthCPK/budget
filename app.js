@@ -590,6 +590,5 @@ if ('serviceWorker' in navigator) {
 }
 
 // ── INIT ──────────────────────────────────────────────────────
-document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
 initTheme();
 renderAll();
