@@ -435,7 +435,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
-});
 document.getElementById('monthFilter').addEventListener('change', e => {
   activeMonth = e.target.value; renderAll();
 });
