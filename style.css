@@ -66,8 +66,17 @@ body, body * {
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body {
+html {
   height: 100%;
+  /* Background on <html> covers the overscroll bounce area on iOS/Android */
+  background: #0a0a0f;
+}
+html.light {
+  background: #f5f4f0;
+}
+
+body {
+  min-height: 100%;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-body);

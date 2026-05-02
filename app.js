@@ -13,9 +13,15 @@ function initTheme() {
 
 function applyTheme(mode) {
   const isLight = mode === 'light';
-  // Apply to both <html> and <body> so overscroll area also gets the bg colour
+  // Toggle class on both elements
   document.documentElement.classList.toggle('light', isLight);
   document.body.classList.toggle('light', isLight);
+  // Set background directly on <html> as inline style — beats any CSS specificity
+  // This ensures the overscroll bounce area on iOS/Android is always the right colour
+  document.documentElement.style.background = isLight ? '#f5f4f0' : '#0a0a0f';
+  // Update theme-color meta so browser chrome matches
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeMeta) themeMeta.setAttribute('content', isLight ? '#f5f4f0' : '#0a0a0f');
   const darkIcon  = document.getElementById('themeIconDark');
   const lightIcon = document.getElementById('themeIconLight');
   if (darkIcon)  darkIcon.style.display  = isLight ? 'none'  : 'block';
@@ -499,17 +505,12 @@ async function autoSync() {
   if (!url) return; // URL not set — skip silently
 
   try {
-    const payload = JSON.stringify({
-      action:   'push',
-      expenses: expenses,
-      archived: archived,
-    });
-    const res = await fetch(url, {
-      method:  'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body:    payload,
-      redirect: 'follow',
-    });
+    const data = encodeURIComponent(JSON.stringify(expenses));
+    const arch = encodeURIComponent(JSON.stringify(archived));
+    const res  = await fetch(
+      `${url}?action=push&data=${data}&arch=${arch}`,
+      { method: 'GET', redirect: 'follow' }
+    );
     const json = await res.json();
     if (json.status === 'ok') {
       const ts = new Date().toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -532,12 +533,10 @@ async function pullFromSheets() {
   btn.innerHTML = '<span class="spinning">↻</span> Pulling...';
 
   try {
-    const res  = await fetch(url, {
-      method:  'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body:    JSON.stringify({ action: 'pull' }),
-      redirect: 'follow',
-    });
+    const res  = await fetch(
+      `${url}?action=pull`,
+      { method: 'GET', redirect: 'follow' }
+    );
     const json = await res.json();
     if (json.status === 'ok' && Array.isArray(json.expenses)) {
       showConfirm(

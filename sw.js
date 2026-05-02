@@ -1,10 +1,9 @@
 /* ============================================================
-   BUDGET PWA — Service Worker v12
+   BUDGET PWA — Service Worker v13
    Uses individual caching so one failed file won't break install
    ============================================================ */
 
-const CACHE = 'budget-v12';
-
+const CACHE = 'budget-v13';
 const ASSETS = [
   '/budget/',
   '/budget/index.html',
