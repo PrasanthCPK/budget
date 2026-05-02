@@ -1,20 +1,20 @@
 /* ============================================================
-   BUDGET PWA — Service Worker v7
+   BUDGET PWA — Service Worker v12
    Uses individual caching so one failed file won't break install
    ============================================================ */
 
-const CACHE = 'budget-v11';
+const CACHE = 'budget-v12';
 
 const ASSETS = [
-  '/budget-app/',
-  '/budget-app/index.html',
-  '/budget-app/style.css',
-  '/budget-app/categories.js',
-  '/budget-app/app.js',
-  '/budget-app/manifest.json',
-  '/budget-app/favicon.ico',
-  '/budget-app/icons/icon-192.png',
-  '/budget-app/icons/icon-512.png',
+  '/budget/',
+  '/budget/index.html',
+  '/budget/style.css',
+  '/budget/categories.js',
+  '/budget/app.js',
+  '/budget/manifest.json',
+  '/budget/favicon.ico',
+  '/budget/icons/icon-192.png',
+  '/budget/icons/icon-512.png',
 ];
 
 // Cache each asset individually — if one fails it won't break the whole install
@@ -52,7 +52,7 @@ self.addEventListener('fetch', e => {
   // For navigation requests, always try network first then fall back to cached index
   if (e.request.mode === 'navigate') {
     e.respondWith(
-      fetch(e.request).catch(() => caches.match('/budget-app/index.html'))
+      fetch(e.request).catch(() => caches.match('/budget/index.html'))
     );
     return;
   }
@@ -68,7 +68,7 @@ self.addEventListener('fetch', e => {
           caches.open(CACHE).then(cache => cache.put(e.request, clone));
         }
         return response;
-      }).catch(() => caches.match('/budget-app/index.html'));
+      }).catch(() => caches.match('/budget/index.html'));
     })
   );
 });
