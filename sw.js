@@ -1,8 +1,9 @@
 /* ============================================================
-   BUDGET PWA v2 — Service Worker
+   BUDGET PWA — Service Worker v3
+   Bumped cache version to force refresh of all cached files
    ============================================================ */
 
-const CACHE = 'budget-v2';
+const CACHE = 'budget-v3';
 const ASSETS = [
   '/budget/',
   '/budget/index.html',
@@ -30,12 +31,14 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // For Sheets API calls — always go to network, never cache
-  if (e.request.url.includes('script.google.com')) {
-    e.respondWith(fetch(e.request));
-    return;
+  const url = e.request.url;
+
+  // Never intercept Google API calls — pass straight to network
+  if (url.includes('script.google.com') || url.includes('googleapis.com')) {
+    return; // Let browser handle it natively — no e.respondWith()
   }
-  // For everything else — cache first, fallback to network
+
+  // Cache-first for all app assets
   e.respondWith(
     caches.match(e.request)
       .then(cached => cached || fetch(e.request)
