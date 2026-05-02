@@ -7,12 +7,17 @@
   --surface: #13131a;
   --surface2: #1c1c26;
   --border: #2a2a38;
-  --accent: #f0c060;
+  --accent: #c8960a;
   --accent2: #e8956a;
+  --accent-light: #f0c060;
   --text: #f0efe8;
   --text-muted: #7a7a90;
   --danger: #e06060;
   --success: #60c090;
+  --header-grad: linear-gradient(160deg, #1a1428 0%, #0d0d18 100%);
+  --accent-bg: #1a1808;
+  --accent-border: #f0c06040;
+  --btn-text: #0a0a0f;
   --radius: 16px;
   --radius-sm: 10px;
   --font-display: 'DM Serif Display', Georgia, serif;
@@ -20,6 +25,32 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* ── LIGHT MODE ──────────────────────────────────────────── */
+body.light {
+  --bg: #f5f4f0;
+  --surface: #ffffff;
+  --surface2: #ede9e0;
+  --border: #d8d3c8;
+  --accent: #b5820a;
+  --accent2: #c8704a;
+  --accent-light: #d4a020;
+  --text: #1a1814;
+  --text-muted: #8a8070;
+  --danger: #cc4444;
+  --success: #3a9060;
+  --header-grad: linear-gradient(160deg, #2d1f4a 0%, #1a1030 100%);
+  --accent-bg: #fdf8e8;
+  --accent-border: #d4a02040;
+  --btn-text: #ffffff;
+}
+
+/* Smooth transition when toggling */
+body, body * {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+}
+/* But don't transition transforms/opacity (breaks animations) */
+.modal, .toast, .modal-overlay { transition: opacity 0.3s, transform 0.35s cubic-bezier(0.4,0,0.2,1) !important; }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -35,7 +66,7 @@ html, body {
 
 /* ── HEADER ─────────────────────────────────────────────── */
 .app-header {
-  background: linear-gradient(160deg, #1a1428 0%, #0d0d18 100%);
+  background: var(--header-grad);
   padding-top: calc(var(--safe-top) + 16px);
   padding-bottom: 28px;
   border-bottom: 1px solid var(--border);
@@ -85,6 +116,14 @@ html, body {
   letter-spacing: -1px;
 }
 .balance-sub { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+
+/* ── HEADER ACTIONS ─────────────────────────────────────── */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
 /* ── TAB NAV ─────────────────────────────────────────────── */
 .tab-nav {
@@ -235,7 +274,7 @@ html, body {
   flex-direction: column;
   gap: 6px;
 }
-.stat-card.accent { border-color: #f0c06040; background: #1a1808; }
+.stat-card.accent { border-color: var(--accent-border); background: var(--accent-bg); }
 .stat-label {
   font-size: 11px;
   font-weight: 600;
@@ -308,7 +347,7 @@ html, body {
   white-space: nowrap;
 }
 .data-btn:active { transform: scale(0.96); }
-.data-btn.primary { background: var(--accent); border-color: var(--accent); color: #0a0a0f; }
+.data-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--btn-text); }
 .data-btn.danger { background: transparent; border-color: var(--danger); color: var(--danger); }
 .data-btn.danger:active { background: #3a1010; }
 .data-btn:disabled { opacity: 0.4; pointer-events: none; }
@@ -480,7 +519,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); }
   -webkit-tap-highlight-color: transparent;
 }
 .cat-chip:active { transform: scale(0.94); }
-.cat-chip.selected { border-color: var(--accent); background: #1a1808; }
+.cat-chip.selected { border-color: var(--accent); background: var(--accent-bg); }
 .cat-chip-emoji { font-size: 22px; }
 .cat-chip-label { font-size: 10px; font-weight: 600; color: var(--text-muted); text-align: center; line-height: 1.2; }
 .cat-chip.selected .cat-chip-label { color: var(--accent); }
@@ -504,6 +543,26 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); }
 .save-btn:active { transform: scale(0.97); opacity: 0.9; }
 
 
+
+/* ── THEME TOGGLE ────────────────────────────────────────── */
+.theme-toggle {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  font-size: 18px;
+  line-height: 1;
+}
+.theme-toggle:active { transform: scale(0.92); }
+
 /* ── ITEM ACTIONS (edit + delete) ───────────────────────── */
 .item-actions {
   display: flex;
@@ -522,7 +581,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); }
   transition: color 0.2s, background 0.2s;
   -webkit-tap-highlight-color: transparent;
 }
-.edit-btn:active { color: var(--accent); background: #1a1808; }
+.edit-btn:active { color: var(--accent); background: var(--accent-bg); }
 
 /* ── TOAST ────────────────────────────────────────────────── */
 .toast {
@@ -542,7 +601,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); }
   pointer-events: none;
 }
 .toast.show { transform: translateX(-50%) translateY(0); }
-.toast.success { background: var(--success); color: #0a0a0f; }
+.toast.success { background: var(--success); color: var(--btn-text); }
 .toast.error { background: var(--danger); color: #fff; }
 
 /* ── CATEGORY COLORS ─────────────────────────────────────── */

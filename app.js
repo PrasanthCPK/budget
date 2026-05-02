@@ -5,21 +5,60 @@
 
 'use strict';
 
+// ── THEME ─────────────────────────────────────────────────────
+function initTheme() {
+  const saved = LS.get('budget_theme', 'dark');
+  applyTheme(saved);
+}
+
+function applyTheme(mode) {
+  const isLight = mode === 'light';
+  document.body.classList.toggle('light', isLight);
+  const btn = document.getElementById('themeToggleBtn');
+  if (btn) btn.textContent = isLight ? '☀️' : '🌙';
+  LS.set('budget_theme', mode);
+}
+
+function toggleTheme() {
+  const isLight = document.body.classList.contains('light');
+  applyTheme(isLight ? 'dark' : 'light');
+}
+
+
 // ── CATEGORIES ──────────────────────────────────────────────
 const CATEGORIES = [
   { id: 'takeout',    label: 'Takeout',     emoji: '🍔' },
   { id: 'groceries',  label: 'Groceries',   emoji: '🛒' },
-  { id: 'transport', label: 'Transport', emoji: '🚗' },
-  { id: 'housing',   label: 'Housing',   emoji: '🏠' },
-  { id: 'health',    label: 'Health',    emoji: '💊' },
+  { id: 'transport',  label: 'Transport',   emoji: '🚗' },
+  { id: 'housing',    label: 'Housing',     emoji: '🏠' },
+  { id: 'health',     label: 'Health',      emoji: '💊' },
   { id: 'insurance',  label: 'Insurance',   emoji: '🛡️' },
   { id: 'investment', label: 'Investment',  emoji: '📈' },
-  { id: 'entertain', label: 'Fun',       emoji: '🎮' },
-  { id: 'shopping',  label: 'Shopping',  emoji: '🛍️' },
-  { id: 'education', label: 'Education', emoji: '📚' },
-  { id: 'utilities', label: 'Utilities', emoji: '🔧' },
-  { id: 'other',     label: 'Other',     emoji: '🌀' },
+  { id: 'entertain',  label: 'Fun',         emoji: '🎮' },
+  { id: 'shopping',   label: 'Shopping',    emoji: '🛍️' },
+  { id: 'education',  label: 'Education',   emoji: '📚' },
+  { id: 'utilities',  label: 'Utilities',   emoji: '🔧' },
+  { id: 'other',      label: 'Other',       emoji: '🌀' },
 ];
+
+// Normalise any date string to YYYY-MM-DD regardless of source format
+// Handles: 'Sat May 02 2026 00:00:00 GMT+0530 (...)' and '2026-05-02' and '05/02/2026'
+function normaliseDate(raw) {
+  if (!raw) return new Date().toISOString().slice(0, 10);
+  // Already in YYYY-MM-DD format
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(raw).trim())) return String(raw).trim();
+  // Parse anything else (long date strings, locale formats, etc.)
+  const d = new Date(raw);
+  if (!isNaN(d.getTime())) {
+    // Use UTC offsets to avoid timezone shifts
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  // Fallback to today
+  return new Date().toISOString().slice(0, 10);
+}
 
 // ── STORAGE HELPERS ──────────────────────────────────────────
 const LS = {
@@ -31,7 +70,7 @@ const LS = {
 };
 
 // ── STATE ────────────────────────────────────────────────────
-let expenses        = LS.get('budget_expenses', []);
+let expenses        = LS.get('budget_expenses', []).map(e => ({ ...e, date: normaliseDate(e.date) }));
 let selectedCat     = CATEGORIES[0].id;
 let editingId       = null;  // null = adding new, string = editing existing
 
@@ -274,7 +313,7 @@ function closeModal() { document.getElementById('modalOverlay').classList.remove
 function saveExpense() {
   const title  = document.getElementById('expTitle').value.trim();
   const amount = parseFloat(document.getElementById('expAmount').value);
-  const date   = document.getElementById('expDate').value;
+  const date   = normaliseDate(document.getElementById('expDate').value);
   if (!title || isNaN(amount) || amount <= 0 || !date) { showToast('Please fill in all fields', 'error'); return; }
 
   if (editingId) {
@@ -345,7 +384,7 @@ function handleImportFile(e) {
         `This will merge ${incoming.length} expense(s) into your app. Duplicate entries will be skipped.`,
         () => {
           const existingIds = new Set(expenses.map(e => e.id));
-          const newOnes = incoming.filter(e => !existingIds.has(e.id));
+          const newOnes = incoming.filter(e => !existingIds.has(e.id)).map(e => ({ ...e, date: normaliseDate(e.date) }));
           expenses = [...expenses, ...newOnes].sort((a, b) => b.date.localeCompare(a.date));
           LS.set('budget_expenses', expenses);
           renderAll();
@@ -408,7 +447,7 @@ async function pullFromSheets() {
         `Found ${json.expenses.length} expense(s) in your Sheet. New entries will be merged in.`,
         () => {
           const existingIds = new Set(expenses.map(e => e.id));
-          const newOnes = json.expenses.filter(e => !existingIds.has(e.id));
+          const newOnes = json.expenses.filter(e => !existingIds.has(e.id)).map(e => ({ ...e, date: normaliseDate(e.date) }));
           expenses = [...expenses, ...newOnes].sort((a, b) => b.date.localeCompare(a.date));
           LS.set('budget_expenses', expenses);
           const ts = new Date().toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -450,6 +489,7 @@ function showToast(msg, type = '') {
 
 // ── UTILS ─────────────────────────────────────────────────────
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+
 const escHtml = s => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 // ── EVENTS ────────────────────────────────────────────────────
@@ -522,10 +562,34 @@ window.addEventListener('resize', () => {
   if (document.getElementById('tab-stats').classList.contains('active')) renderStats();
 });
 
+
+// ── THEME TOGGLE ──────────────────────────────────────────────
+function initTheme() {
+  const saved = LS.get('budget_theme', 'dark');
+  applyTheme(saved);
+}
+
+function applyTheme(theme) {
+  const isLight = theme === 'light';
+  document.body.classList.toggle('light', isLight);
+  document.getElementById('themeIconDark').style.display  = isLight ? 'none'  : 'block';
+  document.getElementById('themeIconLight').style.display = isLight ? 'block' : 'none';
+  LS.set('budget_theme', theme);
+}
+
+function toggleTheme() {
+  const current = LS.get('budget_theme', 'dark');
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+
+document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
+
 // ── SERVICE WORKER ────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
 // ── INIT ──────────────────────────────────────────────────────
+document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
+initTheme();
 renderAll();
