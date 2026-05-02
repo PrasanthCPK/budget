@@ -338,6 +338,7 @@ function saveExpense() {
     closeModal();
     renderAll();
     showToast('Expense updated ✓', 'success');
+    autoSync();
   } else {
     // Add new expense
     expenses.unshift({ id: uid(), title, amount, category: selectedCat, date });
@@ -345,6 +346,7 @@ function saveExpense() {
     closeModal();
     renderAll();
     showToast('Expense added ✓', 'success');
+    autoSync();
   }
 }
 
@@ -356,13 +358,14 @@ function archiveExpense(id) {
   LS.set('budget_expenses', expenses);
   LS.set('budget_archived', archived);
   renderAll();
-  // Show toast with undo option
+  autoSync();
   showToastWithUndo('Expense archived', () => {
     expenses.unshift(expense);
     archived = archived.filter(e => e.id !== id);
     LS.set('budget_expenses', expenses);
     LS.set('budget_archived', archived);
     renderAll();
+    autoSync();
   });
 }
 
@@ -377,6 +380,7 @@ function restoreExpense(id) {
   renderArchive();
   renderAll();
   showToast('Restored ✓', 'success');
+  autoSync();
 }
 
 function deleteArchived(id) {
@@ -385,6 +389,7 @@ function deleteArchived(id) {
   renderArchive();
   updateArchiveBadge();
   showToast('Permanently deleted');
+  autoSync();
 }
 
 function renderArchive() {
@@ -486,60 +491,35 @@ function handleImportFile(e) {
 }
 
 // ── GOOGLE SHEETS SYNC ────────────────────────────────────────
-// Chunk array into smaller pieces to avoid URL length limits
-function chunkArray(arr, size) {
-  const chunks = [];
-  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
-  return chunks;
-}
+// ── AUTO SYNC ─────────────────────────────────────────────────
+// Called silently after every create/update/archive/restore/delete.
+// Only runs if a Sheets URL is configured. Errors shown as toast.
+async function autoSync() {
+  const url = LS.get('budget_sheets_url', '');
+  if (!url) return; // URL not set — skip silently
 
-// Send all rows to sheet via chunked sequential requests
-async function sendChunks(url, rows, action) {
-  const CHUNK_SIZE = 50;
-  const chunks = chunkArray(rows, CHUNK_SIZE);
-  // If no rows, still send one empty request so the sheet clears correctly
-  const toSend = chunks.length > 0 ? chunks : [[]];
-  for (let i = 0; i < toSend.length; i++) {
-    const body = JSON.stringify({
-      action,
-      data:    toSend[i],
-      chunk:   i,
-      total:   toSend.length,
-      replace: i === 0 ? '1' : '0',
+  try {
+    const payload = JSON.stringify({
+      action:   'push',
+      expenses: expenses,
+      archived: archived,
     });
     const res = await fetch(url, {
       method:  'POST',
-      headers: { 'Content-Type': 'text/plain' }, // text/plain avoids CORS preflight
-      body,
+      headers: { 'Content-Type': 'text/plain' },
+      body:    payload,
       redirect: 'follow',
     });
     const json = await res.json();
-    if (json.status !== 'ok') throw new Error(json.message || 'Unknown error');
-  }
-}
-
-async function pushToSheets() {
-  const url = LS.get('budget_sheets_url', '');
-  if (!url) { showToast('Paste your Apps Script URL first', 'error'); return; }
-
-  const btn = document.getElementById('syncPushBtn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinning">↻</span> Pushing...';
-
-  try {
-    // Push active expenses first (replace=1 clears sheet), then archived (replace=0 appends)
-    await sendChunks(url, expenses, 'pushActive');
-    await sendChunks(url, archived, 'pushArchived');
-
-    const ts = new Date().toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-    LS.set('budget_last_sync', ts);
-    renderDataTab();
-    showToast(`Pushed ${expenses.length} active + ${archived.length} archived ✓`, 'success');
-  } catch (err) {
-    showToast('Sheets error: ' + err.message, 'error');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg> Push to Sheets';
+    if (json.status === 'ok') {
+      const ts = new Date().toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      LS.set('budget_last_sync', ts);
+      renderDataTab();
+    } else {
+      showToast('Sync failed: ' + (json.message || 'unknown error'), 'error');
+    }
+  } catch {
+    showToast('Sheets sync failed. Check your URL.', 'error');
   }
 }
 
@@ -689,7 +669,6 @@ document.getElementById('monthFilter').addEventListener('change', e => {
 document.getElementById('exportBtn').addEventListener('click', exportData);
 document.getElementById('importBtn').addEventListener('click', triggerImport);
 document.getElementById('importFileInput').addEventListener('change', handleImportFile);
-document.getElementById('syncPushBtn').addEventListener('click', pushToSheets);
 document.getElementById('syncPullBtn').addEventListener('click', pullFromSheets);
 
 document.getElementById('saveUrlBtn').addEventListener('click', () => {
@@ -709,9 +688,12 @@ document.getElementById('setupToggle').addEventListener('click', () => {
 document.getElementById('clearDataBtn').addEventListener('click', () => {
   showConfirm('🗑️ Clear All Data', `This will permanently delete all ${expenses.length} expense(s). This cannot be undone.`, () => {
     expenses = [];
+    archived = [];
     LS.set('budget_expenses', expenses);
+    LS.set('budget_archived', archived);
     renderAll();
     showToast('All data cleared', 'success');
+    autoSync();
   });
 });
 

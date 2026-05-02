@@ -152,15 +152,12 @@
           </div>
         </div>
         <div class="data-actions">
-          <button class="data-btn primary" id="syncPushBtn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-            Push to Sheets
-          </button>
-          <button class="data-btn" id="syncPullBtn">
+          <button class="data-btn primary" id="syncPullBtn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
             Pull from Sheets
           </button>
         </div>
+        <p class="sync-note">Changes sync to Sheets automatically when a URL is saved.</p>
         <div class="sheets-url-group">
           <label class="form-label">Apps Script Web App URL</label>
           <input class="form-input" type="url" id="sheetsUrl" placeholder="https://script.google.com/macros/s/..." />
