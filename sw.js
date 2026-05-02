@@ -3,7 +3,7 @@
    Bumped cache version to force refresh of all cached files
    ============================================================ */
 
-const CACHE = 'budget-v3';
+const CACHE = 'budget-v4';
 const ASSETS = [
   '/budget/',
   '/budget/index.html',

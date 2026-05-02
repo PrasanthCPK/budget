@@ -9,16 +9,16 @@
 const CATEGORIES = [
   { id: 'takeout',    label: 'Takeout',     emoji: '🍔' },
   { id: 'groceries',  label: 'Groceries',   emoji: '🛒' },
-  { id: 'transport',  label: 'Transport',   emoji: '🚗' },
-  { id: 'housing',    label: 'Housing',     emoji: '🏠' },
-  { id: 'health',     label: 'Health',      emoji: '💊' },
+  { id: 'transport', label: 'Transport', emoji: '🚗' },
+  { id: 'housing',   label: 'Housing',   emoji: '🏠' },
+  { id: 'health',    label: 'Health',    emoji: '💊' },
   { id: 'insurance',  label: 'Insurance',   emoji: '🛡️' },
   { id: 'investment', label: 'Investment',  emoji: '📈' },
-  { id: 'entertain',  label: 'Fun',         emoji: '🎮' },
-  { id: 'shopping',   label: 'Shopping',    emoji: '🛍️' },
-  { id: 'education',  label: 'Education',   emoji: '📚' },
-  { id: 'utilities',  label: 'Utilities',   emoji: '🔧' },
-  { id: 'other',      label: 'Other',       emoji: '🌀' },
+  { id: 'entertain', label: 'Fun',       emoji: '🎮' },
+  { id: 'shopping',  label: 'Shopping',  emoji: '🛍️' },
+  { id: 'education', label: 'Education', emoji: '📚' },
+  { id: 'utilities', label: 'Utilities', emoji: '🔧' },
+  { id: 'other',     label: 'Other',     emoji: '🌀' },
 ];
 
 // ── STORAGE HELPERS ──────────────────────────────────────────
@@ -33,6 +33,7 @@ const LS = {
 // ── STATE ────────────────────────────────────────────────────
 let expenses        = LS.get('budget_expenses', []);
 let selectedCat     = CATEGORIES[0].id;
+let editingId       = null;  // null = adding new, string = editing existing
 
 let activeMonth = new Date().toISOString().slice(0, 7);
 
@@ -90,15 +91,22 @@ function renderExpenses() {
         </div>
         <div class="expense-right">
           <span class="expense-amount">${fmt(e.amount)}</span>
-          <button class="delete-btn" data-id="${e.id}" aria-label="Delete">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-          </button>
+          <div class="item-actions">
+            <button class="edit-btn" data-id="${e.id}" aria-label="Edit">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="delete-btn" data-id="${e.id}" aria-label="Delete">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+            </button>
+          </div>
         </div>
       </div>`;
     }).join('');
   }).join('');
   container.querySelectorAll('.delete-btn').forEach(btn =>
     btn.addEventListener('click', () => deleteExpense(btn.dataset.id)));
+  container.querySelectorAll('.edit-btn').forEach(btn =>
+    btn.addEventListener('click', () => openEditModal(btn.dataset.id)));
 }
 
 // ── RENDER: STATS ─────────────────────────────────────────────
@@ -234,10 +242,28 @@ function renderCategoryGrid() {
 }
 
 function openModal() {
-  document.getElementById('expDate').value  = new Date().toISOString().slice(0, 10);
-  document.getElementById('expTitle').value = '';
+  editingId = null;
+  document.getElementById('modalHeading').textContent = 'New Expense';
+  document.getElementById('saveBtn').textContent      = 'Save Expense';
+  document.getElementById('expDate').value   = new Date().toISOString().slice(0, 10);
+  document.getElementById('expTitle').value  = '';
   document.getElementById('expAmount').value = '';
   selectedCat = CATEGORIES[0].id;
+  renderCategoryGrid();
+  document.getElementById('modalOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('expTitle').focus(), 400);
+}
+
+function openEditModal(id) {
+  const expense = expenses.find(e => e.id === id);
+  if (!expense) return;
+  editingId = id;
+  document.getElementById('modalHeading').textContent = 'Edit Expense';
+  document.getElementById('saveBtn').textContent      = 'Update Expense';
+  document.getElementById('expTitle').value  = expense.title;
+  document.getElementById('expAmount').value = expense.amount;
+  document.getElementById('expDate').value   = expense.date;
+  selectedCat = expense.category;
   renderCategoryGrid();
   document.getElementById('modalOverlay').classList.add('open');
   setTimeout(() => document.getElementById('expTitle').focus(), 400);
@@ -250,11 +276,24 @@ function saveExpense() {
   const amount = parseFloat(document.getElementById('expAmount').value);
   const date   = document.getElementById('expDate').value;
   if (!title || isNaN(amount) || amount <= 0 || !date) { showToast('Please fill in all fields', 'error'); return; }
-  expenses.unshift({ id: uid(), title, amount, category: selectedCat, date });
-  LS.set('budget_expenses', expenses);
-  closeModal();
-  renderAll();
-  showToast('Expense added ✓', 'success');
+
+  if (editingId) {
+    // Update existing expense
+    expenses = expenses.map(e =>
+      e.id === editingId ? { ...e, title, amount, category: selectedCat, date } : e
+    );
+    LS.set('budget_expenses', expenses);
+    closeModal();
+    renderAll();
+    showToast('Expense updated ✓', 'success');
+  } else {
+    // Add new expense
+    expenses.unshift({ id: uid(), title, amount, category: selectedCat, date });
+    LS.set('budget_expenses', expenses);
+    closeModal();
+    renderAll();
+    showToast('Expense added ✓', 'success');
+  }
 }
 
 function deleteExpense(id) {

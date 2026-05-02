@@ -503,6 +503,27 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); }
 }
 .save-btn:active { transform: scale(0.97); opacity: 0.9; }
 
+
+/* ── ITEM ACTIONS (edit + delete) ───────────────────────── */
+.item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.edit-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  border-radius: 6px;
+  transition: color 0.2s, background 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.edit-btn:active { color: var(--accent); background: #1a1808; }
+
 /* ── TOAST ────────────────────────────────────────────────── */
 .toast {
   position: fixed;
