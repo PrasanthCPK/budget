@@ -9,6 +9,9 @@
   <meta name="theme-color" content="#0a0a0f" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png" />
   <title>Budget</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
@@ -55,8 +58,6 @@
     <section id="tab-expenses" class="tab-panel active">
       <div class="filter-row">
         <select id="monthFilter" class="filter-select"></select>
-        <button class="chip-btn active" data-filter="all">All</button>
-        <button class="chip-btn" data-filter="week">This Week</button>
       </div>
       <div id="expenseList" class="expense-list">
         <div class="empty-state">

@@ -145,21 +145,6 @@ html, body {
   appearance: none;
   -webkit-appearance: none;
 }
-.chip-btn {
-  flex-shrink: 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 500;
-  padding: 7px 14px;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.2s;
-  -webkit-tap-highlight-color: transparent;
-}
-.chip-btn.active { background: var(--accent); border-color: var(--accent); color: #0a0a0f; }
 
 /* ── EXPENSE LIST ─────────────────────────────────────────── */
 .expense-list { padding: 0 16px 16px; }

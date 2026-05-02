@@ -1,79 +1,65 @@
 /* ============================================================
-   BUDGET PWA — App Logic
+   BUDGET PWA v2 — App Logic
+   Includes: Expenses, Stats, Export, Import, Sheets Sync
    ============================================================ */
 
 'use strict';
 
 // ── CATEGORIES ──────────────────────────────────────────────
 const CATEGORIES = [
-  { id: 'food',      label: 'Food',        emoji: '🍔' },
-  { id: 'transport', label: 'Transport',   emoji: '🚗' },
-  { id: 'housing',   label: 'Housing',     emoji: '🏠' },
-  { id: 'health',    label: 'Health',      emoji: '💊' },
-  { id: 'entertain', label: 'Fun',         emoji: '🎮' },
-  { id: 'shopping',  label: 'Shopping',    emoji: '🛍️' },
-  { id: 'education', label: 'Education',   emoji: '📚' },
-  { id: 'utilities', label: 'Utilities',   emoji: '🔧' },
-  { id: 'other',     label: 'Other',       emoji: '🌀' },
+  { id: 'food',      label: 'Food',      emoji: '🍔' },
+  { id: 'transport', label: 'Transport', emoji: '🚗' },
+  { id: 'housing',   label: 'Housing',   emoji: '🏠' },
+  { id: 'health',    label: 'Health',    emoji: '💊' },
+  { id: 'entertain', label: 'Fun',       emoji: '🎮' },
+  { id: 'shopping',  label: 'Shopping',  emoji: '🛍️' },
+  { id: 'education', label: 'Education', emoji: '📚' },
+  { id: 'utilities', label: 'Utilities', emoji: '🔧' },
+  { id: 'other',     label: 'Other',     emoji: '🌀' },
 ];
 
-// ── STORAGE ──────────────────────────────────────────────────
-function loadExpenses() {
-  try {
-    return JSON.parse(localStorage.getItem('budget_expenses') || '[]');
-  } catch { return []; }
-}
-
-function saveExpenses(expenses) {
-  localStorage.setItem('budget_expenses', JSON.stringify(expenses));
-}
+// ── STORAGE HELPERS ──────────────────────────────────────────
+const LS = {
+  get: (k, fallback = null) => {
+    try { const v = localStorage.getItem(k); return v !== null ? JSON.parse(v) : fallback; }
+    catch { return fallback; }
+  },
+  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
 
 // ── STATE ────────────────────────────────────────────────────
-let expenses = loadExpenses();
-let selectedCategory = CATEGORIES[0].id;
-let activeFilter = 'all';
-let activeMonth = '';
+let expenses        = LS.get('budget_expenses', []);
+let selectedCat     = CATEGORIES[0].id;
 
-// ── HELPERS ──────────────────────────────────────────────────
+let activeMonth = new Date().toISOString().slice(0, 7);
+
+// ── CURRENCY ─────────────────────────────────────────────────
 const fmt = (n) => '₹' + Number(n).toFixed(2);
 
-function getMonths() {
-  const set = new Set(expenses.map(e => e.date.slice(0, 7)));
-  return [...set].sort().reverse();
-}
-
+// ── FILTERS ──────────────────────────────────────────────────
 function filterExpenses() {
   let list = [...expenses];
   if (activeMonth) list = list.filter(e => e.date.startsWith(activeMonth));
-  if (activeFilter === 'week') {
-    const now = new Date();
-    const weekAgo = new Date(now - 7 * 86400000);
-    list = list.filter(e => new Date(e.date) >= weekAgo);
-  }
   return list.sort((a, b) => b.date.localeCompare(a.date));
 }
 
 // ── RENDER: HEADER ───────────────────────────────────────────
 function renderHeader() {
-  const filtered = filterExpenses();
-  const total = filtered.reduce((s, e) => s + e.amount, 0);
+  const total = filterExpenses().reduce((s, e) => s + e.amount, 0);
   document.getElementById('totalDisplay').textContent = fmt(total);
-
-  const now = new Date();
-  const label = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  document.getElementById('monthLabel').textContent = label;
+  document.getElementById('monthLabel').textContent =
+    new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 }
 
 // ── RENDER: MONTH FILTER ─────────────────────────────────────
 function renderMonthFilter() {
+  const months = [...new Set(expenses.map(e => e.date.slice(0, 7)))].sort().reverse();
   const sel = document.getElementById('monthFilter');
-  const months = getMonths();
-  sel.innerHTML = '<option value="">All time</option>' +
-    months.map(m => {
-      const [y, mo] = m.split('-');
-      const label = new Date(y, mo - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-      return `<option value="${m}">${label}</option>`;
-    }).join('');
+  sel.innerHTML = '<option value="">All time</option>' + months.map(m => {
+    const [y, mo] = m.split('-');
+    const label = new Date(y, mo - 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+    return `<option value="${m}">${label}</option>`;
+  }).join('');
   sel.value = activeMonth;
 }
 
@@ -81,50 +67,35 @@ function renderMonthFilter() {
 function renderExpenses() {
   const list = filterExpenses();
   const container = document.getElementById('expenseList');
-
   if (list.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">🪙</div>
-        <p>No expenses here yet.<br/>Tap <strong>+</strong> to add one.</p>
-      </div>`;
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🪙</div>
+      <p>No expenses here yet.<br/>Tap <strong>+</strong> to add one.</p></div>`;
     return;
   }
-
-  // Group by date
   const groups = {};
-  for (const e of list) {
-    if (!groups[e.date]) groups[e.date] = [];
-    groups[e.date].push(e);
-  }
-
+  for (const e of list) { if (!groups[e.date]) groups[e.date] = []; groups[e.date].push(e); }
   container.innerHTML = Object.entries(groups).map(([date, items]) => {
-    const d = new Date(date + 'T00:00:00');
-    const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    const rows = items.map(e => {
+    const label = new Date(date + 'T00:00:00')
+      .toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' });
+    return `<div class="date-group-label">${label}</div>` + items.map(e => {
       const cat = CATEGORIES.find(c => c.id === e.category) || CATEGORIES[8];
-      return `
-        <div class="expense-item" data-id="${e.id}">
-          <div class="expense-emoji">${cat.emoji}</div>
-          <div class="expense-info">
-            <div class="expense-title">${escHtml(e.title)}</div>
-            <div class="expense-cat">${cat.label}</div>
-          </div>
-          <div class="expense-right">
-            <span class="expense-amount">${fmt(e.amount)}</span>
-            <button class="delete-btn" data-id="${e.id}" aria-label="Delete">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-            </button>
-          </div>
-        </div>`;
+      return `<div class="expense-item" data-id="${e.id}">
+        <div class="expense-emoji">${cat.emoji}</div>
+        <div class="expense-info">
+          <div class="expense-title">${escHtml(e.title)}</div>
+          <div class="expense-cat">${cat.label}</div>
+        </div>
+        <div class="expense-right">
+          <span class="expense-amount">${fmt(e.amount)}</span>
+          <button class="delete-btn" data-id="${e.id}" aria-label="Delete">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+          </button>
+        </div>
+      </div>`;
     }).join('');
-    return `<div class="date-group-label">${label}</div>${rows}`;
   }).join('');
-
-  // Delete handlers
-  container.querySelectorAll('.delete-btn').forEach(btn => {
-    btn.addEventListener('click', () => deleteExpense(btn.dataset.id));
-  });
+  container.querySelectorAll('.delete-btn').forEach(btn =>
+    btn.addEventListener('click', () => deleteExpense(btn.dataset.id)));
 }
 
 // ── RENDER: STATS ─────────────────────────────────────────────
@@ -132,227 +103,107 @@ function renderStats() {
   const list = filterExpenses();
   const total = list.reduce((s, e) => s + e.amount, 0);
   const count = list.length;
-  const avg = count ? total / count : 0;
-  const max = count ? Math.max(...list.map(e => e.amount)) : 0;
-
   document.getElementById('statTotal').textContent = fmt(total);
   document.getElementById('statCount').textContent = count;
-  document.getElementById('statAvg').textContent = fmt(avg);
-  document.getElementById('statMax').textContent = fmt(max);
+  document.getElementById('statAvg').textContent   = fmt(count ? total / count : 0);
+  document.getElementById('statMax').textContent   = fmt(count ? Math.max(...list.map(e => e.amount)) : 0);
 
-  // Category bars
-  const bars = document.getElementById('categoryBars');
-  const catTotals = CATEGORIES.map((cat, i) => {
-    const sum = list.filter(e => e.category === cat.id).reduce((s, e) => s + e.amount, 0);
-    return { cat, sum, i };
-  }).filter(r => r.sum > 0).sort((a, b) => b.sum - a.sum);
+  const catTotals = CATEGORIES.map((cat, i) => ({
+    cat, i, sum: list.filter(e => e.category === cat.id).reduce((s, e) => s + e.amount, 0)
+  })).filter(r => r.sum > 0).sort((a, b) => b.sum - a.sum);
 
-  bars.innerHTML = catTotals.length === 0
-    ? '<p style="color:var(--text-muted);font-size:14px;padding:8px 0;">No data yet.</p>'
-    : catTotals.map(({ cat, sum, i }) => {
-        const pct = total ? (sum / total * 100).toFixed(1) : 0;
-        const barW = total ? (sum / total * 100) : 0;
-        return `
-          <div class="cat-bar-row">
-            <div class="cat-bar-meta">
-              <span class="cat-bar-name">${cat.emoji} ${cat.label}</span>
-              <span class="cat-bar-vals">${fmt(sum)} · ${pct}%</span>
-            </div>
-            <div class="cat-bar-track">
-              <div class="cat-bar-fill color-${i % 9}" style="width:${barW}%"></div>
-            </div>
-          </div>`;
-      }).join('');
+  document.getElementById('categoryBars').innerHTML = catTotals.length === 0
+    ? '<p style="color:var(--text-muted);font-size:14px">No data yet.</p>'
+    : catTotals.map(({ cat, sum, i }) => `
+        <div class="cat-bar-row">
+          <div class="cat-bar-meta">
+            <span class="cat-bar-name">${cat.emoji} ${cat.label}</span>
+            <span class="cat-bar-vals">${fmt(sum)} · ${total ? (sum/total*100).toFixed(1) : 0}%</span>
+          </div>
+          <div class="cat-bar-track">
+            <div class="cat-bar-fill color-${i % 9}" style="width:${total ? sum/total*100 : 0}%"></div>
+          </div>
+        </div>`).join('');
 
   renderLineChart(list);
 }
 
 // ── LINE CHART ────────────────────────────────────────────────
-let chartInstance = null;
-
 function renderLineChart(list) {
   const canvas = document.getElementById('lineChart');
   const ctx = canvas.getContext('2d');
-
-  // Aggregate by date
   const byDate = {};
-  for (const e of list) {
-    byDate[e.date] = (byDate[e.date] || 0) + e.amount;
-  }
+  for (const e of list) byDate[e.date] = (byDate[e.date] || 0) + e.amount;
   const dates = Object.keys(byDate).sort();
   const amounts = dates.map(d => byDate[d]);
 
-  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
-
-  if (dates.length === 0) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#7a7a90';
-    ctx.font = '14px DM Sans';
-    ctx.textAlign = 'center';
-    ctx.fillText('No data to display', canvas.width / 2, canvas.height / 2);
-    return;
-  }
-
-  // Draw simple chart manually (no external lib needed)
-  drawSimpleChart(canvas, ctx, dates, amounts);
-}
-
-function drawSimpleChart(canvas, ctx, dates, amounts) {
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
   canvas.width = rect.width * dpr;
   canvas.height = rect.height * dpr;
   ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+  const PAD = { top: 12, right: 16, bottom: 32, left: 52 };
+  const cW = W - PAD.left - PAD.right, cH = H - PAD.top - PAD.bottom;
 
-  const W = rect.width;
-  const H = rect.height;
-  const PAD = { top: 12, right: 16, bottom: 32, left: 50 };
-  const chartW = W - PAD.left - PAD.right;
-  const chartH = H - PAD.top - PAD.bottom;
+  if (dates.length === 0) {
+    ctx.fillStyle = '#7a7a90'; ctx.font = '14px DM Sans'; ctx.textAlign = 'center';
+    ctx.fillText('No data to display', W / 2, H / 2); return;
+  }
 
   const maxVal = Math.max(...amounts);
   const n = amounts.length;
+  const xP = i => PAD.left + (n === 1 ? cW / 2 : (i / (n - 1)) * cW);
+  const yP = v => PAD.top + cH - (v / maxVal) * cH;
 
-  const xPos = (i) => PAD.left + (n === 1 ? chartW / 2 : (i / (n - 1)) * chartW);
-  const yPos = (v) => PAD.top + chartH - (v / maxVal) * chartH;
-
-  // Grid lines
-  ctx.strokeStyle = '#2a2a38';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#2a2a38'; ctx.lineWidth = 1;
   for (let g = 0; g <= 4; g++) {
-    const y = PAD.top + (g / 4) * chartH;
-    ctx.beginPath();
-    ctx.moveTo(PAD.left, y);
-    ctx.lineTo(W - PAD.right, y);
-    ctx.stroke();
-
-    // Y labels
-    const val = maxVal - (g / 4) * maxVal;
-    ctx.fillStyle = '#7a7a90';
-    ctx.font = `${11 * 1}px DM Sans`;
-    ctx.textAlign = 'right';
-    ctx.fillText('₹' + val.toFixed(0), PAD.left - 6, y + 4);
+    const y = PAD.top + (g / 4) * cH;
+    ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(W - PAD.right, y); ctx.stroke();
+    ctx.fillStyle = '#7a7a90'; ctx.font = '11px DM Sans'; ctx.textAlign = 'right';
+    ctx.fillText('₹' + (maxVal - (g / 4) * maxVal).toFixed(0), PAD.left - 5, y + 4);
   }
 
-  // Gradient fill
-  const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + chartH);
+  const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
   grad.addColorStop(0, 'rgba(240,192,96,0.35)');
   grad.addColorStop(1, 'rgba(240,192,96,0)');
+  ctx.beginPath(); ctx.moveTo(xP(0), yP(amounts[0]));
+  for (let i = 1; i < n; i++) ctx.lineTo(xP(i), yP(amounts[i]));
+  ctx.lineTo(xP(n - 1), PAD.top + cH); ctx.lineTo(xP(0), PAD.top + cH);
+  ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
 
-  ctx.beginPath();
-  ctx.moveTo(xPos(0), yPos(amounts[0]));
-  for (let i = 1; i < n; i++) ctx.lineTo(xPos(i), yPos(amounts[i]));
-  ctx.lineTo(xPos(n - 1), PAD.top + chartH);
-  ctx.lineTo(xPos(0), PAD.top + chartH);
-  ctx.closePath();
-  ctx.fillStyle = grad;
-  ctx.fill();
+  ctx.beginPath(); ctx.moveTo(xP(0), yP(amounts[0]));
+  for (let i = 1; i < n; i++) ctx.lineTo(xP(i), yP(amounts[i]));
+  ctx.strokeStyle = '#f0c060'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.stroke();
 
-  // Line
-  ctx.beginPath();
-  ctx.moveTo(xPos(0), yPos(amounts[0]));
-  for (let i = 1; i < n; i++) ctx.lineTo(xPos(i), yPos(amounts[i]));
-  ctx.strokeStyle = '#f0c060';
-  ctx.lineWidth = 2.5;
-  ctx.lineJoin = 'round';
-  ctx.stroke();
-
-  // Dots
   for (let i = 0; i < n; i++) {
-    ctx.beginPath();
-    ctx.arc(xPos(i), yPos(amounts[i]), 4, 0, Math.PI * 2);
-    ctx.fillStyle = '#f0c060';
-    ctx.fill();
-    ctx.strokeStyle = '#0a0a0f';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    ctx.beginPath(); ctx.arc(xP(i), yP(amounts[i]), 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#f0c060'; ctx.fill();
+    ctx.strokeStyle = '#0a0a0f'; ctx.lineWidth = 2; ctx.stroke();
   }
 
-  // X labels (show first, last, and up to 3 middle)
-  const labelIndices = n <= 5
-    ? dates.map((_, i) => i)
-    : [0, Math.floor(n / 3), Math.floor(2 * n / 3), n - 1];
-
-  ctx.fillStyle = '#7a7a90';
-  ctx.font = `${10}px DM Sans`;
-  ctx.textAlign = 'center';
-  for (const i of [...new Set(labelIndices)]) {
+  const lblIdx = n <= 5 ? dates.map((_, i) => i) : [0, Math.floor(n/3), Math.floor(2*n/3), n-1];
+  ctx.fillStyle = '#7a7a90'; ctx.font = '10px DM Sans'; ctx.textAlign = 'center';
+  for (const i of [...new Set(lblIdx)]) {
     const d = new Date(dates[i] + 'T00:00:00');
-    const lbl = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    ctx.fillText(lbl, xPos(i), H - 8);
+    ctx.fillText(d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }), xP(i), H - 8);
   }
 }
 
-// ── ADD EXPENSE ───────────────────────────────────────────────
-function renderCategoryGrid() {
-  document.getElementById('categoryGrid').innerHTML = CATEGORIES.map(cat => `
-    <button class="cat-chip ${cat.id === selectedCategory ? 'selected' : ''}" data-id="${cat.id}">
-      <span class="cat-chip-emoji">${cat.emoji}</span>
-      <span class="cat-chip-label">${cat.label}</span>
-    </button>
-  `).join('');
-
-  document.querySelectorAll('.cat-chip').forEach(btn => {
-    btn.addEventListener('click', () => {
-      selectedCategory = btn.dataset.id;
-      document.querySelectorAll('.cat-chip').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-    });
-  });
+// ── RENDER: DATA TAB ─────────────────────────────────────────
+function renderDataTab() {
+  const sorted = [...expenses].sort((a, b) => a.date.localeCompare(b.date));
+  document.getElementById('storageCount').textContent   = expenses.length;
+  document.getElementById('storageOldest').textContent  = sorted.length ? fmtDate(sorted[0].date) : '—';
+  document.getElementById('storageNewest').textContent  = sorted.length ? fmtDate(sorted[sorted.length-1].date) : '—';
+  document.getElementById('lastExported').textContent   = LS.get('budget_last_export', 'Never');
+  document.getElementById('lastSynced').textContent     = LS.get('budget_last_sync', 'Never');
+  const url = LS.get('budget_sheets_url', '');
+  if (url) document.getElementById('sheetsUrl').value = url;
 }
 
-function openModal() {
-  document.getElementById('expDate').value = new Date().toISOString().slice(0, 10);
-  document.getElementById('expTitle').value = '';
-  document.getElementById('expAmount').value = '';
-  selectedCategory = CATEGORIES[0].id;
-  renderCategoryGrid();
-  document.getElementById('modalOverlay').classList.add('open');
-  setTimeout(() => document.getElementById('expTitle').focus(), 400);
-}
-
-function closeModal() {
-  document.getElementById('modalOverlay').classList.remove('open');
-}
-
-function saveExpense() {
-  const title = document.getElementById('expTitle').value.trim();
-  const amount = parseFloat(document.getElementById('expAmount').value);
-  const date = document.getElementById('expDate').value;
-
-  if (!title || isNaN(amount) || amount <= 0 || !date) {
-    showToast('Please fill in all fields');
-    return;
-  }
-
-  const expense = {
-    id: Date.now().toString(36) + Math.random().toString(36).slice(2),
-    title,
-    amount,
-    category: selectedCategory,
-    date,
-  };
-
-  expenses.unshift(expense);
-  saveExpenses(expenses);
-  closeModal();
-  renderAll();
-  showToast('Expense added ✓');
-}
-
-function deleteExpense(id) {
-  expenses = expenses.filter(e => e.id !== id);
-  saveExpenses(expenses);
-  renderAll();
-  showToast('Deleted');
-}
-
-// ── TOAST ─────────────────────────────────────────────────────
-function showToast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 2200);
+function fmtDate(d) {
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 // ── RENDER ALL ────────────────────────────────────────────────
@@ -360,21 +211,215 @@ function renderAll() {
   renderHeader();
   renderMonthFilter();
   renderExpenses();
-  renderStats();
+  renderDataTab();
 }
 
-// ── ESCAPE HTML ───────────────────────────────────────────────
-function escHtml(str) {
-  return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// ── ADD EXPENSE ───────────────────────────────────────────────
+function renderCategoryGrid() {
+  document.getElementById('categoryGrid').innerHTML = CATEGORIES.map(cat =>
+    `<button class="cat-chip ${cat.id === selectedCat ? 'selected' : ''}" data-id="${cat.id}">
+      <span class="cat-chip-emoji">${cat.emoji}</span>
+      <span class="cat-chip-label">${cat.label}</span>
+    </button>`
+  ).join('');
+  document.querySelectorAll('.cat-chip').forEach(btn =>
+    btn.addEventListener('click', () => {
+      selectedCat = btn.dataset.id;
+      document.querySelectorAll('.cat-chip').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    }));
 }
+
+function openModal() {
+  document.getElementById('expDate').value  = new Date().toISOString().slice(0, 10);
+  document.getElementById('expTitle').value = '';
+  document.getElementById('expAmount').value = '';
+  selectedCat = CATEGORIES[0].id;
+  renderCategoryGrid();
+  document.getElementById('modalOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('expTitle').focus(), 400);
+}
+
+function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
+
+function saveExpense() {
+  const title  = document.getElementById('expTitle').value.trim();
+  const amount = parseFloat(document.getElementById('expAmount').value);
+  const date   = document.getElementById('expDate').value;
+  if (!title || isNaN(amount) || amount <= 0 || !date) { showToast('Please fill in all fields', 'error'); return; }
+  expenses.unshift({ id: uid(), title, amount, category: selectedCat, date });
+  LS.set('budget_expenses', expenses);
+  closeModal();
+  renderAll();
+  showToast('Expense added ✓', 'success');
+}
+
+function deleteExpense(id) {
+  expenses = expenses.filter(e => e.id !== id);
+  LS.set('budget_expenses', expenses);
+  renderAll();
+  showToast('Deleted');
+}
+
+// ── EXPORT ────────────────────────────────────────────────────
+function exportData() {
+  if (expenses.length === 0) { showToast('No data to export', 'error'); return; }
+  const payload = { version: 2, exported: new Date().toISOString(), expenses };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const date = new Date().toISOString().slice(0, 10);
+  a.href     = url;
+  a.download = `budget-backup-${date}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  const ts = new Date().toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  LS.set('budget_last_export', ts);
+  renderDataTab();
+  showToast(`Exported ${expenses.length} entries ✓`, 'success');
+}
+
+// ── IMPORT ────────────────────────────────────────────────────
+function triggerImport() { document.getElementById('importFileInput').click(); }
+
+function handleImportFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      const incoming = Array.isArray(data) ? data : (data.expenses || []);
+      if (!incoming.length) { showToast('No expenses found in file', 'error'); return; }
+
+      // Validate shape
+      const valid = incoming.every(x => x.id && x.title && x.amount != null && x.date);
+      if (!valid) { showToast('File format not recognised', 'error'); return; }
+
+      showConfirm(
+        '📥 Import Data',
+        `This will merge ${incoming.length} expense(s) into your app. Duplicate entries will be skipped.`,
+        () => {
+          const existingIds = new Set(expenses.map(e => e.id));
+          const newOnes = incoming.filter(e => !existingIds.has(e.id));
+          expenses = [...expenses, ...newOnes].sort((a, b) => b.date.localeCompare(a.date));
+          LS.set('budget_expenses', expenses);
+          renderAll();
+          showToast(`Imported ${newOnes.length} new entry(s) ✓`, 'success');
+        }
+      );
+    } catch { showToast('Could not read file', 'error'); }
+  };
+  reader.readAsText(file);
+  e.target.value = ''; // reset so same file can be re-selected
+}
+
+// ── GOOGLE SHEETS SYNC ────────────────────────────────────────
+async function pushToSheets() {
+  const url = LS.get('budget_sheets_url', '');
+  if (!url) { showToast('Paste your Apps Script URL first', 'error'); return; }
+
+  const btn = document.getElementById('syncPushBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinning">↻</span> Pushing...';
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'push', expenses }),
+    });
+    const json = await res.json();
+    if (json.status === 'ok') {
+      const ts = new Date().toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      LS.set('budget_last_sync', ts);
+      renderDataTab();
+      showToast(`Pushed ${expenses.length} entries to Sheets ✓`, 'success');
+    } else {
+      showToast('Sheets error: ' + (json.message || 'unknown'), 'error');
+    }
+  } catch {
+    showToast('Could not reach Sheets. Check URL or network.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg> Push to Sheets';
+  }
+}
+
+async function pullFromSheets() {
+  const url = LS.get('budget_sheets_url', '');
+  if (!url) { showToast('Paste your Apps Script URL first', 'error'); return; }
+
+  const btn = document.getElementById('syncPullBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinning">↻</span> Pulling...';
+
+  try {
+    const res  = await fetch(url + '?action=pull');
+    const json = await res.json();
+    if (json.status === 'ok' && Array.isArray(json.expenses)) {
+      showConfirm(
+        '📥 Pull from Sheets',
+        `Found ${json.expenses.length} expense(s) in your Sheet. New entries will be merged in.`,
+        () => {
+          const existingIds = new Set(expenses.map(e => e.id));
+          const newOnes = json.expenses.filter(e => !existingIds.has(e.id));
+          expenses = [...expenses, ...newOnes].sort((a, b) => b.date.localeCompare(a.date));
+          LS.set('budget_expenses', expenses);
+          const ts = new Date().toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+          LS.set('budget_last_sync', ts);
+          renderAll();
+          showToast(`Pulled ${newOnes.length} new entry(s) ✓`, 'success');
+        }
+      );
+    } else {
+      showToast('Sheets error: ' + (json.message || 'unknown'), 'error');
+    }
+  } catch {
+    showToast('Could not reach Sheets. Check URL or network.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg> Pull from Sheets';
+  }
+}
+
+// ── CONFIRM MODAL ─────────────────────────────────────────────
+function showConfirm(title, msg, onConfirm) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmMsg').textContent   = msg;
+  document.getElementById('confirmOverlay').classList.add('open');
+  document.getElementById('confirmOkBtn').onclick = () => {
+    closeConfirm(); onConfirm();
+  };
+}
+function closeConfirm() { document.getElementById('confirmOverlay').classList.remove('open'); }
+
+// ── TOAST ─────────────────────────────────────────────────────
+function showToast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className   = 'toast' + (type ? ' ' + type : '');
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+// ── UTILS ─────────────────────────────────────────────────────
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+const escHtml = s => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 // ── EVENTS ────────────────────────────────────────────────────
+
+// Add expense
 document.getElementById('openAddBtn').addEventListener('click', openModal);
 document.getElementById('closeModalBtn').addEventListener('click', closeModal);
 document.getElementById('saveBtn').addEventListener('click', saveExpense);
-
 document.getElementById('modalOverlay').addEventListener('click', e => {
   if (e.target === document.getElementById('modalOverlay')) closeModal();
+});
+document.getElementById('expAmount').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveExpense();
 });
 
 // Tabs
@@ -385,38 +430,57 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.add('active');
     document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'stats') renderStats();
+    if (btn.dataset.tab === 'data')  renderDataTab();
   });
 });
 
-// Chip filters
-document.querySelectorAll('.chip-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    activeFilter = btn.dataset.filter;
-    renderAll();
-  });
 });
-
-// Month filter
 document.getElementById('monthFilter').addEventListener('change', e => {
-  activeMonth = e.target.value;
-  renderAll();
+  activeMonth = e.target.value; renderAll();
 });
 
-// Enter key on form
-document.getElementById('expAmount').addEventListener('keydown', e => {
-  if (e.key === 'Enter') saveExpense();
-});
+// Data tab
+document.getElementById('exportBtn').addEventListener('click', exportData);
+document.getElementById('importBtn').addEventListener('click', triggerImport);
+document.getElementById('importFileInput').addEventListener('change', handleImportFile);
+document.getElementById('syncPushBtn').addEventListener('click', pushToSheets);
+document.getElementById('syncPullBtn').addEventListener('click', pullFromSheets);
 
-// Redraw chart on resize
-window.addEventListener('resize', () => {
-  if (document.getElementById('tab-stats').classList.contains('active')) {
-    renderStats();
+document.getElementById('saveUrlBtn').addEventListener('click', () => {
+  const url = document.getElementById('sheetsUrl').value.trim();
+  if (!url.startsWith('https://script.google.com')) {
+    showToast('Please paste a valid Apps Script URL', 'error'); return;
   }
+  LS.set('budget_sheets_url', url);
+  showToast('URL saved ✓', 'success');
 });
 
-// ── SERVICE WORKER REGISTRATION ───────────────────────────────
+document.getElementById('setupToggle').addEventListener('click', () => {
+  const el = document.getElementById('setupSteps');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+});
+
+document.getElementById('clearDataBtn').addEventListener('click', () => {
+  showConfirm('🗑️ Clear All Data', `This will permanently delete all ${expenses.length} expense(s). This cannot be undone.`, () => {
+    expenses = [];
+    LS.set('budget_expenses', expenses);
+    renderAll();
+    showToast('All data cleared', 'success');
+  });
+});
+
+// Confirm modal
+document.getElementById('confirmCancelBtn').addEventListener('click', closeConfirm);
+document.getElementById('confirmOverlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('confirmOverlay')) closeConfirm();
+});
+
+// Resize chart
+window.addEventListener('resize', () => {
+  if (document.getElementById('tab-stats').classList.contains('active')) renderStats();
+});
+
+// ── SERVICE WORKER ────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
