@@ -486,6 +486,38 @@ function handleImportFile(e) {
 }
 
 // ── GOOGLE SHEETS SYNC ────────────────────────────────────────
+// Chunk array into smaller pieces to avoid URL length limits
+function chunkArray(arr, size) {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
+}
+
+// Send all rows to sheet via chunked sequential requests
+async function sendChunks(url, rows, action) {
+  const CHUNK_SIZE = 50;
+  const chunks = chunkArray(rows, CHUNK_SIZE);
+  // If no rows, still send one empty request so the sheet clears correctly
+  const toSend = chunks.length > 0 ? chunks : [[]];
+  for (let i = 0; i < toSend.length; i++) {
+    const body = JSON.stringify({
+      action,
+      data:    toSend[i],
+      chunk:   i,
+      total:   toSend.length,
+      replace: i === 0 ? '1' : '0',
+    });
+    const res = await fetch(url, {
+      method:  'POST',
+      headers: { 'Content-Type': 'text/plain' }, // text/plain avoids CORS preflight
+      body,
+      redirect: 'follow',
+    });
+    const json = await res.json();
+    if (json.status !== 'ok') throw new Error(json.message || 'Unknown error');
+  }
+}
+
 async function pushToSheets() {
   const url = LS.get('budget_sheets_url', '');
   if (!url) { showToast('Paste your Apps Script URL first', 'error'); return; }
@@ -495,24 +527,16 @@ async function pushToSheets() {
   btn.innerHTML = '<span class="spinning">↻</span> Pushing...';
 
   try {
-    // Send both active and archived expenses
-    const payload = encodeURIComponent(JSON.stringify(expenses));
-    const archPayload = encodeURIComponent(JSON.stringify(archived));
-    const res = await fetch(url + '?action=push&data=' + payload + '&arch=' + archPayload, {
-      method: 'GET',
-      redirect: 'follow',
-    });
-    const json = await res.json();
-    if (json.status === 'ok') {
-      const ts = new Date().toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-      LS.set('budget_last_sync', ts);
-      renderDataTab();
-      showToast(`Pushed ${expenses.length} active + ${archived.length} archived ✓`, 'success');
-    } else {
-      showToast('Sheets error: ' + (json.message || 'unknown'), 'error');
-    }
+    // Push active expenses first (replace=1 clears sheet), then archived (replace=0 appends)
+    await sendChunks(url, expenses, 'pushActive');
+    await sendChunks(url, archived, 'pushArchived');
+
+    const ts = new Date().toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    LS.set('budget_last_sync', ts);
+    renderDataTab();
+    showToast(`Pushed ${expenses.length} active + ${archived.length} archived ✓`, 'success');
   } catch (err) {
-    showToast('Could not reach Sheets. Check URL or network.', 'error');
+    showToast('Sheets error: ' + err.message, 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg> Push to Sheets';
@@ -528,7 +552,12 @@ async function pullFromSheets() {
   btn.innerHTML = '<span class="spinning">↻</span> Pulling...';
 
   try {
-    const res  = await fetch(url + '?action=pull');
+    const res  = await fetch(url, {
+      method:  'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body:    JSON.stringify({ action: 'pull' }),
+      redirect: 'follow',
+    });
     const json = await res.json();
     if (json.status === 'ok' && Array.isArray(json.expenses)) {
       showConfirm(
@@ -591,16 +620,35 @@ function closeConfirm() { document.getElementById('confirmOverlay').classList.re
 // ── TOAST ─────────────────────────────────────────────────────
 function showToast(msg, type = '') {
   const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className   = 'toast' + (type ? ' ' + type : '');
+  el.innerHTML = escHtml(msg);
+  el.className = 'toast' + (type ? ' ' + type : '');
   el.style.visibility = 'visible';
   el.classList.add('show');
   clearTimeout(el._hideTimer);
   el._hideTimer = setTimeout(() => {
     el.classList.remove('show');
-    // Wait for slide-out animation to finish, then fully hide
     setTimeout(() => { el.style.visibility = 'hidden'; }, 350);
   }, 2400);
+}
+
+function showToastWithUndo(msg, onUndo) {
+  const el = document.getElementById('toast');
+  el.innerHTML = escHtml(msg) +
+    ' <button class="toast-undo" id="toastUndoBtn">Undo</button>';
+  el.className = 'toast';
+  el.style.visibility = 'visible';
+  el.classList.add('show');
+  clearTimeout(el._hideTimer);
+  document.getElementById('toastUndoBtn').addEventListener('click', () => {
+    el.classList.remove('show');
+    setTimeout(() => { el.style.visibility = 'hidden'; }, 350);
+    clearTimeout(el._hideTimer);
+    onUndo();
+  });
+  el._hideTimer = setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => { el.style.visibility = 'hidden'; }, 350);
+  }, 4000);
 }
 
 // ── UTILS ─────────────────────────────────────────────────────
