@@ -25,39 +25,46 @@ function toggleTheme() {
 }
 
 
-// ── CATEGORIES ──────────────────────────────────────────────
-const CATEGORIES = [
-  { id: 'takeout',    label: 'Takeout',     emoji: '🍔' },
-  { id: 'groceries',  label: 'Groceries',   emoji: '🛒' },
-  { id: 'transport',  label: 'Transport',   emoji: '🚗' },
-  { id: 'housing',    label: 'Housing',     emoji: '🏠' },
-  { id: 'health',     label: 'Health',      emoji: '💊' },
-  { id: 'insurance',  label: 'Insurance',   emoji: '🛡️' },
-  { id: 'investment', label: 'Investment',  emoji: '📈' },
-  { id: 'entertain',  label: 'Fun',         emoji: '🎮' },
-  { id: 'shopping',   label: 'Shopping',    emoji: '🛍️' },
-  { id: 'education',  label: 'Education',   emoji: '📚' },
-  { id: 'utilities',  label: 'Utilities',   emoji: '🔧' },
-  { id: 'other',      label: 'Other',       emoji: '🌀' },
-];
-
 // Normalise any date string to YYYY-MM-DD regardless of source format
 // Handles: 'Sat May 02 2026 00:00:00 GMT+0530 (...)' and '2026-05-02' and '05/02/2026'
 function normaliseDate(raw) {
-  if (!raw) return new Date().toISOString().slice(0, 10);
-  // Already in YYYY-MM-DD format
-  if (/^\d{4}-\d{2}-\d{2}$/.test(String(raw).trim())) return String(raw).trim();
-  // Parse anything else (long date strings, locale formats, etc.)
-  const d = new Date(raw);
+  if (!raw) return todayStr();
+  const s = String(raw).trim();
+
+  // Already correct: YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  // Try to extract YYYY-MM-DD directly from longer strings
+  // e.g. 'Sat May 02 2026 00:00:00 GMT+0530 (India Standard Time)'
+  const isoMatch = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+
+  // Try parsing as a Date object and use UTC methods to avoid timezone shift
+  const d = new Date(s);
   if (!isNaN(d.getTime())) {
-    // Use UTC offsets to avoid timezone shifts
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
+    // Use UTC to avoid date shifting due to timezone offset
+    const y   = d.getUTCFullYear();
+    const m   = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   }
-  // Fallback to today
-  return new Date().toISOString().slice(0, 10);
+
+  return todayStr();
+}
+
+function todayStr() {
+  const d   = new Date();
+  const y   = d.getFullYear();
+  const m   = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// Parse YYYY-MM-DD as local time (new Date('YYYY-MM-DD') is UTC on iOS — this fixes it)
+function parseLocalDate(str) {
+  const s = normaliseDate(str);
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
 }
 
 // ── STORAGE HELPERS ──────────────────────────────────────────
@@ -74,7 +81,7 @@ let expenses        = LS.get('budget_expenses', []).map(e => ({ ...e, date: norm
 let selectedCat     = CATEGORIES[0].id;
 let editingId       = null;  // null = adding new, string = editing existing
 
-let activeMonth = new Date().toISOString().slice(0, 7);
+let activeMonth = todayStr().slice(0, 7);
 
 // ── CURRENCY ─────────────────────────────────────────────────
 const fmt = (n) => '₹' + Number(n).toFixed(2);
@@ -118,7 +125,7 @@ function renderExpenses() {
   const groups = {};
   for (const e of list) { if (!groups[e.date]) groups[e.date] = []; groups[e.date].push(e); }
   container.innerHTML = Object.entries(groups).map(([date, items]) => {
-    const label = new Date(date + 'T00:00:00')
+    const label = parseLocalDate(date)
       .toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' });
     return `<div class="date-group-label">${label}</div>` + items.map(e => {
       const cat = CATEGORIES.find(c => c.id === e.category) || CATEGORIES[8];
@@ -235,7 +242,7 @@ function renderLineChart(list) {
   const lblIdx = n <= 5 ? dates.map((_, i) => i) : [0, Math.floor(n/3), Math.floor(2*n/3), n-1];
   ctx.fillStyle = '#7a7a90'; ctx.font = '10px DM Sans'; ctx.textAlign = 'center';
   for (const i of [...new Set(lblIdx)]) {
-    const d = new Date(dates[i] + 'T00:00:00');
+    const d = parseLocalDate(dates[i]);
     ctx.fillText(d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }), xP(i), H - 8);
   }
 }
@@ -253,7 +260,7 @@ function renderDataTab() {
 }
 
 function fmtDate(d) {
-  return new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  return parseLocalDate(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 // ── RENDER ALL ────────────────────────────────────────────────
@@ -444,16 +451,28 @@ async function pullFromSheets() {
     if (json.status === 'ok' && Array.isArray(json.expenses)) {
       showConfirm(
         '📥 Pull from Sheets',
-        `Found ${json.expenses.length} expense(s) in your Sheet. New entries will be merged in.`,
+        `Found ${json.expenses.length} expense(s) in your Sheet. Existing entries will be updated and new ones added.`,
         () => {
-          const existingIds = new Set(expenses.map(e => e.id));
-          const newOnes = json.expenses.filter(e => !existingIds.has(e.id)).map(e => ({ ...e, date: normaliseDate(e.date) }));
-          expenses = [...expenses, ...newOnes].sort((a, b) => b.date.localeCompare(a.date));
+          const incoming = json.expenses.map(e => ({ ...e, date: normaliseDate(e.date) }));
+          const incomingMap = new Map(incoming.map(e => [e.id, e]));
+          // Update existing entries with sheet data, keep local-only entries
+          let updatedCount = 0;
+          const merged = expenses.map(e => {
+            if (incomingMap.has(e.id)) {
+              updatedCount++;
+              return { ...e, ...incomingMap.get(e.id) };
+            }
+            return e;
+          });
+          // Add brand-new entries from sheet not present locally
+          const localIds = new Set(expenses.map(e => e.id));
+          const brandNew = incoming.filter(e => !localIds.has(e.id));
+          expenses = [...merged, ...brandNew].sort((a, b) => b.date.localeCompare(a.date));
           LS.set('budget_expenses', expenses);
           const ts = new Date().toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
           LS.set('budget_last_sync', ts);
           renderAll();
-          showToast(`Pulled ${newOnes.length} new entry(s) ✓`, 'success');
+          showToast(`${brandNew.length} new · ${updatedCount} updated ✓`, 'success');
         }
       );
     } else {
@@ -483,8 +502,14 @@ function showToast(msg, type = '') {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.className   = 'toast' + (type ? ' ' + type : '');
+  el.style.visibility = 'visible';
   el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 2400);
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(() => {
+    el.classList.remove('show');
+    // Wait for slide-out animation to finish, then fully hide
+    setTimeout(() => { el.style.visibility = 'hidden'; }, 350);
+  }, 2400);
 }
 
 // ── UTILS ─────────────────────────────────────────────────────

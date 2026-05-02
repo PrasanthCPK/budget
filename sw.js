@@ -3,15 +3,16 @@
    Bumped cache version to force refresh of all cached files
    ============================================================ */
 
-const CACHE = 'budget-v5';
+const CACHE = 'budget-v6';
 const ASSETS = [
-  '/budget/',
-  '/budget/index.html',
-  '/budget/style.css',
-  '/budget/app.js',
-  '/budget/manifest.json',
-  '/budget/icons/icon-192.png',
-  '/budget/icons/icon-512.png',
+  '/budget-app/',
+  '/budget-app/index.html',
+  '/budget-app/style.css',
+  '/budget-app/categories.js',
+  '/budget-app/app.js',
+  '/budget-app/manifest.json',
+  '/budget-app/icons/icon-192.png',
+  '/budget-app/icons/icon-512.png',
 ];
 
 self.addEventListener('install', e => {
@@ -42,7 +43,7 @@ self.addEventListener('fetch', e => {
   e.respondWith(
     caches.match(e.request)
       .then(cached => cached || fetch(e.request)
-        .catch(() => caches.match('/budget/index.html'))
+        .catch(() => caches.match('/budget-app/index.html'))
       )
   );
 });
