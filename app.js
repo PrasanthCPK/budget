@@ -326,10 +326,11 @@ async function pushToSheets() {
   btn.innerHTML = '<span class="spinning">↻</span> Pushing...';
 
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'push', expenses }),
+    // Send data as a GET request with encoded payload to avoid CORS preflight issues
+    const payload = encodeURIComponent(JSON.stringify(expenses));
+    const res = await fetch(url + '?action=push&data=' + payload, {
+      method: 'GET',
+      redirect: 'follow',
     });
     const json = await res.json();
     if (json.status === 'ok') {
@@ -340,7 +341,7 @@ async function pushToSheets() {
     } else {
       showToast('Sheets error: ' + (json.message || 'unknown'), 'error');
     }
-  } catch {
+  } catch (err) {
     showToast('Could not reach Sheets. Check URL or network.', 'error');
   } finally {
     btn.disabled = false;
@@ -434,6 +435,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
+});
 document.getElementById('monthFilter').addEventListener('change', e => {
   activeMonth = e.target.value; renderAll();
 });

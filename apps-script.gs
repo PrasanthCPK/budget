@@ -1,39 +1,36 @@
 // ============================================================
-//  BUDGET PWA — Google Apps Script
-//  Paste this entire file into your Apps Script editor.
-//  Deploy as a Web App (Execute as: Me, Access: Only myself)
+//  BUDGET PWA — Google Apps Script (CORS-safe version)
+//  All requests use GET to avoid CORS preflight issues.
+//
+//  SETUP:
+//  1. Paste this into Apps Script editor
+//  2. Deploy > New deployment > Web app
+//  3. Execute as: Me
+//  4. Who has access: Only myself
+//  5. Copy the Web App URL into your Budget app
 // ============================================================
 
-// The name of the sheet tab to use
 const SHEET_NAME = 'Expenses';
+const HEADERS    = ['ID', 'Title', 'Amount', 'Category', 'Date', 'Synced At'];
 
-// Column headers
-const HEADERS = ['ID', 'Title', 'Amount', 'Category', 'Date', 'Synced At'];
-
-// ── GET: Pull expenses from the sheet ────────────────────────
+// ── ALL REQUESTS COME IN AS GET ──────────────────────────────
 function doGet(e) {
   try {
     const action = e && e.parameter && e.parameter.action;
+
+    if (action === 'push') {
+      const raw      = e.parameter.data || '[]';
+      const expenses = JSON.parse(decodeURIComponent(raw));
+      return push(expenses);
+    }
+
     if (action === 'pull') {
       return pull();
     }
-    return jsonResponse({ status: 'ok', message: 'Budget PWA Sync API running.' });
-  } catch (err) {
-    return jsonResponse({ status: 'error', message: err.toString() });
-  }
-}
 
-// ── POST: Push expenses to the sheet ─────────────────────────
-function doPost(e) {
-  try {
-    const body    = JSON.parse(e.postData.contents);
-    const action  = body.action;
+    // Health check
+    return jsonResponse({ status: 'ok', message: 'Budget PWA Sync API is running.' });
 
-    if (action === 'push') {
-      return push(body.expenses || []);
-    }
-
-    return jsonResponse({ status: 'error', message: 'Unknown action: ' + action });
   } catch (err) {
     return jsonResponse({ status: 'error', message: err.toString() });
   }
@@ -43,29 +40,25 @@ function doPost(e) {
 function push(expenses) {
   const sheet = getOrCreateSheet();
 
-  // Clear existing data (keep header)
   const lastRow = sheet.getLastRow();
   if (lastRow > 1) {
     sheet.getRange(2, 1, lastRow - 1, HEADERS.length).clearContent();
   }
 
-  // Write all expenses
   if (expenses.length > 0) {
     const now  = new Date().toISOString();
     const rows = expenses.map(e => [
-      e.id,
-      e.title,
-      Number(e.amount),
-      e.category,
-      e.date,
+      e.id       || '',
+      e.title    || '',
+      Number(e.amount) || 0,
+      e.category || '',
+      e.date     || '',
       now,
     ]);
     sheet.getRange(2, 1, rows.length, HEADERS.length).setValues(rows);
   }
 
-  // Auto-resize columns for readability
   sheet.autoResizeColumns(1, HEADERS.length);
-
   return jsonResponse({ status: 'ok', pushed: expenses.length });
 }
 
@@ -80,7 +73,7 @@ function pull() {
 
   const rows     = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
   const expenses = rows
-    .filter(r => r[0]) // skip empty rows
+    .filter(r => r[0])
     .map(r => ({
       id:       String(r[0]),
       title:    String(r[1]),
@@ -96,17 +89,11 @@ function pull() {
 function getOrCreateSheet() {
   const ss    = SpreadsheetApp.getActiveSpreadsheet();
   let   sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) sheet = ss.insertSheet(SHEET_NAME);
 
-  if (!sheet) {
-    sheet = ss.insertSheet(SHEET_NAME);
-  }
-
-  // Ensure headers exist
-  const firstCell = sheet.getRange(1, 1).getValue();
-  if (firstCell !== 'ID') {
-    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
-    // Style the header row
+  if (sheet.getRange(1, 1).getValue() !== 'ID') {
     const headerRange = sheet.getRange(1, 1, 1, HEADERS.length);
+    headerRange.setValues([HEADERS]);
     headerRange.setBackground('#1a1428');
     headerRange.setFontColor('#f0c060');
     headerRange.setFontWeight('bold');
