@@ -34,9 +34,11 @@
         </div>
       </div>
       <div class="balance-block">
-        <span class="balance-label">Total Spent</span>
-        <span class="balance-amount" id="totalDisplay">₹0.00</span>
-        <span class="balance-sub" id="monthLabel"></span>
+        <div class="balance-left">
+          <span class="balance-label">Total Spent</span>
+          <span class="balance-amount" id="totalDisplay">₹0.00</span>
+        </div>
+        <select id="monthFilter" class="month-filter-select"></select>
       </div>
     </div>
   </header>
@@ -62,8 +64,8 @@
 
     <!-- EXPENSES TAB -->
     <section id="tab-expenses" class="tab-panel active">
-      <div class="filter-row">
-        <select id="monthFilter" class="filter-select"></select>
+      <div class="filter-row" id="categoryFilterRow">
+        <!-- populated dynamically from CATEGORIES in app.js -->
       </div>
       <div id="expenseList" class="expense-list">
         <div class="empty-state">
@@ -190,6 +192,7 @@
             <div class="data-section-sub">All data lives locally on this device</div>
           </div>
         </div>
+        <p id="syncMode" style="font-size:13px;font-weight:600;padding:0 0 10px;"></p>
         <div class="storage-info">
           <div class="storage-row"><span>Total entries</span><span id="storageCount">0</span></div>
           <div class="storage-row"><span>Oldest entry</span><span id="storageOldest">—</span></div>

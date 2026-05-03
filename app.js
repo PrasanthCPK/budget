@@ -90,8 +90,13 @@ let expenses        = LS.get('budget_expenses', []).map(e => ({ ...e, date: norm
 let archived        = LS.get('budget_archived', []).map(e => ({ ...e, date: normaliseDate(e.date) }));
 let selectedCat     = CATEGORIES[0].id;
 let editingId       = null;  // null = adding new, string = editing existing
+let activeCat       = 'all'; // category filter on expenses tab
 
-let activeMonth = todayStr().slice(0, 7);
+let activeMonth     = todayStr().slice(0, 7);
+
+// Online mode = Sheets URL is configured. All reads/writes go to Sheets.
+// Offline mode = no URL. Data lives in localStorage only.
+function isOnlineMode() { return !!LS.get('budget_sheets_url', ''); }
 
 // ── CURRENCY ─────────────────────────────────────────────────
 const fmt = (n) => '₹' + Number(n).toFixed(2);
@@ -100,6 +105,7 @@ const fmt = (n) => '₹' + Number(n).toFixed(2);
 function filterExpenses() {
   let list = [...expenses];
   if (activeMonth) list = list.filter(e => e.date.startsWith(activeMonth));
+  if (activeCat !== 'all') list = list.filter(e => e.category === activeCat);
   return list.sort((a, b) => b.date.localeCompare(a.date));
 }
 
@@ -107,20 +113,23 @@ function filterExpenses() {
 function renderHeader() {
   const total = filterExpenses().reduce((s, e) => s + e.amount, 0);
   document.getElementById('totalDisplay').textContent = fmt(total);
-  document.getElementById('monthLabel').textContent =
-    new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 }
 
-// ── RENDER: MONTH FILTER ─────────────────────────────────────
+// ── RENDER: MONTH FILTER (now in header) ─────────────────────
 function renderMonthFilter() {
+  // Build month list from all expenses (ignore category filter for month list)
   const months = [...new Set(expenses.map(e => e.date.slice(0, 7)))].sort().reverse();
+  // Always include current month even if no data yet
+  const currentMonth = todayStr().slice(0, 7);
+  if (!months.includes(currentMonth)) months.unshift(currentMonth);
+
   const sel = document.getElementById('monthFilter');
-  sel.innerHTML = '<option value="">All time</option>' + months.map(m => {
+  sel.innerHTML = months.map(m => {
     const [y, mo] = m.split('-');
     const label = new Date(y, mo - 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
     return `<option value="${m}">${label}</option>`;
   }).join('');
-  sel.value = activeMonth;
+  sel.value = activeMonth || currentMonth;
 }
 
 // ── RENDER: EXPENSE LIST ─────────────────────────────────────
@@ -267,6 +276,11 @@ function renderDataTab() {
   document.getElementById('lastSynced').textContent     = LS.get('budget_last_sync', 'Never');
   const url = LS.get('budget_sheets_url', '');
   if (url) document.getElementById('sheetsUrl').value = url;
+  // Show online/offline mode indicator
+  const modeEl = document.getElementById('syncMode');
+  if (modeEl) {
+    modeEl.textContent = isOnlineMode() ? '🟢 Online — syncing to Sheets' : '🔴 Offline — saving locally';
+  }
 }
 
 function fmtDate(d) {
@@ -339,7 +353,7 @@ function saveExpense() {
     expenses = expenses.map(e =>
       e.id === editingId ? { ...e, title, amount, category: selectedCat, date } : e
     );
-    LS.set('budget_expenses', expenses);
+    if (!isOnlineMode()) LS.set('budget_expenses', expenses);
     closeModal();
     renderAll();
     showToast('Expense updated ✓', 'success');
@@ -347,7 +361,7 @@ function saveExpense() {
   } else {
     // Add new expense
     expenses.unshift({ id: uid(), title, amount, category: selectedCat, date });
-    LS.set('budget_expenses', expenses);
+    if (!isOnlineMode()) LS.set('budget_expenses', expenses);
     closeModal();
     renderAll();
     showToast('Expense added ✓', 'success');
@@ -360,15 +374,13 @@ function archiveExpense(id) {
   if (!expense) return;
   archived.unshift({ ...expense, archivedAt: todayStr() });
   expenses = expenses.filter(e => e.id !== id);
-  LS.set('budget_expenses', expenses);
-  LS.set('budget_archived', archived);
+  if (!isOnlineMode()) { LS.set('budget_expenses', expenses); LS.set('budget_archived', archived); }
   renderAll();
   autoSync();
   showToastWithUndo('Expense archived', () => {
     expenses.unshift(expense);
     archived = archived.filter(e => e.id !== id);
-    LS.set('budget_expenses', expenses);
-    LS.set('budget_archived', archived);
+    if (!isOnlineMode()) { LS.set('budget_expenses', expenses); LS.set('budget_archived', archived); }
     renderAll();
     autoSync();
   });
@@ -380,8 +392,7 @@ function restoreExpense(id) {
   const { archivedAt, ...clean } = expense;
   expenses.unshift(clean);
   archived = archived.filter(e => e.id !== id);
-  LS.set('budget_expenses', expenses);
-  LS.set('budget_archived', archived);
+  if (!isOnlineMode()) { LS.set('budget_expenses', expenses); LS.set('budget_archived', archived); }
   renderArchive();
   renderAll();
   showToast('Restored ✓', 'success');
@@ -390,7 +401,7 @@ function restoreExpense(id) {
 
 function deleteArchived(id) {
   archived = archived.filter(e => e.id !== id);
-  LS.set('budget_archived', archived);
+  if (!isOnlineMode()) LS.set('budget_archived', archived);
   renderArchive();
   updateArchiveBadge();
   showToast('Permanently deleted');
@@ -496,6 +507,24 @@ function handleImportFile(e) {
 }
 
 // ── GOOGLE SHEETS SYNC ────────────────────────────────────────
+// ── PULL SILENT ──────────────────────────────────────────────
+// Pulls all data from Sheets into memory without showing confirm dialog.
+// Used on app load (online mode) and on month change.
+async function pullSilent() {
+  const url = LS.get('budget_sheets_url', '');
+  if (!url) return;
+  try {
+    const res  = await fetch(`${url}?action=pull`, { method: 'GET', redirect: 'follow' });
+    const json = await res.json();
+    if (json.status === 'ok') {
+      expenses = (json.expenses || []).map(e => ({ ...e, date: normaliseDate(e.date) }));
+      archived = (json.archived || []).map(e => ({ ...e, date: normaliseDate(e.date) }));
+      const ts = new Date().toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      LS.set('budget_last_sync', ts);
+    }
+  } catch { /* silent — app still works from memory */ }
+}
+
 // ── AUTO SYNC ─────────────────────────────────────────────────
 // Called silently after every create/update/archive/restore/delete.
 // Only runs if a Sheets URL is configured. Errors shown as toast.
@@ -693,8 +722,8 @@ on('clearDataBtn', 'click', () => {
   showConfirm('🗑️ Clear All Data', `This will permanently delete all ${expenses.length} expense(s). This cannot be undone.`, () => {
     expenses = [];
     archived = [];
-    LS.set('budget_expenses', expenses);
-    LS.set('budget_archived', archived);
+    LS.set('budget_expenses', []);
+    LS.set('budget_archived', []);
     renderAll();
     showToast('All data cleared', 'success');
     autoSync();
@@ -749,4 +778,41 @@ if ('serviceWorker' in navigator) {
 
 // ── INIT ──────────────────────────────────────────────────────
 initTheme();
-renderAll();
+
+// Build category filter chips dynamically from CATEGORIES
+function buildCategoryFilter() {
+  const row = document.getElementById('categoryFilterRow');
+  if (!row) return;
+  const allBtn = `<button class="chip-btn active" data-cat="all">All</button>`;
+  const catBtns = CATEGORIES.map(cat =>
+    `<button class="chip-btn" data-cat="${cat.id}">${cat.emoji} ${cat.label}</button>`
+  ).join('');
+  row.innerHTML = allBtn + catBtns;
+
+  row.querySelectorAll('.chip-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      row.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeCat = btn.dataset.cat;
+      renderExpenses();
+      renderHeader();
+    });
+  });
+}
+buildCategoryFilter();
+
+// Month filter change
+on('monthFilter', 'change', async e => {
+  activeMonth = e.target.value;
+  if (isOnlineMode()) await pullSilent();
+  renderAll();
+  if (document.getElementById('tab-stats') && document.getElementById('tab-stats').classList.contains('active')) renderStats();
+});
+
+if (isOnlineMode()) {
+  // Online mode: load fresh from Sheets on startup
+  renderAll(); // render with cached data first so UI isn't blank
+  pullSilent().then(() => renderAll());
+} else {
+  renderAll();
+}

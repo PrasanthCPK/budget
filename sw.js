@@ -1,9 +1,10 @@
 /* ============================================================
-   BUDGET PWA — Service Worker v14
-   Uses individual caching so one failed file won't break install
+   BUDGET PWA — Service Worker v15
+   Paths use /budget/ (renamed from /budget-app/)
    ============================================================ */
 
-const CACHE = 'budget-v14';
+const CACHE = 'budget-v15';
+
 const ASSETS = [
   '/budget/',
   '/budget/index.html',
@@ -16,7 +17,6 @@ const ASSETS = [
   '/budget/icons/icon-512.png',
 ];
 
-// Cache each asset individually — if one fails it won't break the whole install
 async function precache() {
   const cache = await caches.open(CACHE);
   await Promise.allSettled(
@@ -48,7 +48,6 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // For navigation requests, always try network first then fall back to cached index
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request).catch(() => caches.match('/budget/index.html'))
@@ -56,12 +55,10 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Cache-first for all other assets
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
       return fetch(e.request).then(response => {
-        // Cache successful responses for future use
         if (response && response.status === 200) {
           const clone = response.clone();
           caches.open(CACHE).then(cache => cache.put(e.request, clone));
