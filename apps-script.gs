@@ -24,7 +24,8 @@ function doGet(e) {
     }
 
     if (action === 'pull') {
-      return pull();
+      const month = (e && e.parameter && e.parameter.month) || '';
+      return pull(month);
     }
 
     return jsonResponse({ status: 'ok', message: 'Budget PWA Sync API running.' });
@@ -75,7 +76,8 @@ function rowFor(e, archivedFlag, now) {
 }
 
 // ── PULL ─────────────────────────────────────────────────────
-function pull() {
+// Optional `month` param (format: YYYY-MM) limits results to that month.
+function pull(month) {
   const sheet   = getOrCreateSheet();
   const lastRow = sheet.getLastRow();
   if (lastRow <= 1) {
@@ -95,6 +97,10 @@ function pull() {
     } else {
       dateVal = String(dateVal).substring(0, 10); // take first 10 chars: YYYY-MM-DD
     }
+
+    // Filter by month if a month param was provided
+    if (month && !dateVal.startsWith(month)) return;
+
     const entry = {
       id:       String(r[0]),
       title:    String(r[1]),

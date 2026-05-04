@@ -117,16 +117,28 @@ function renderHeader() {
 
 // ── RENDER: MONTH FILTER (now in header) ─────────────────────
 function renderMonthFilter() {
-  // Build month list from all expenses (ignore category filter for month list)
-  const months = [...new Set(expenses.map(e => e.date.slice(0, 7)))].sort().reverse();
-  // Always include current month even if no data yet
+  // Always generate a rolling 12-month window so the dropdown is usable
+  // even in online mode where expenses only holds the current month.
   const currentMonth = todayStr().slice(0, 7);
-  if (!months.includes(currentMonth)) months.unshift(currentMonth);
+  const months = [];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - i);
+    const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    months.push(m);
+  }
+  // Also include any months present in local data that fall outside the window
+  const localMonths = [...new Set(expenses.map(e => e.date.slice(0, 7)))];
+  for (const m of localMonths) {
+    if (!months.includes(m)) months.push(m);
+  }
+  months.sort().reverse();
 
   const sel = document.getElementById('monthFilter');
   sel.innerHTML = months.map(m => {
     const [y, mo] = m.split('-');
-    const label = new Date(y, mo - 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+    const label = new Date(Number(y), Number(mo) - 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
     return `<option value="${m}">${label}</option>`;
   }).join('');
   sel.value = activeMonth || currentMonth;
@@ -291,6 +303,7 @@ function fmtDate(d) {
 function renderAll() {
   renderHeader();
   renderMonthFilter();
+  buildCategoryFilter();
   renderExpenses();
   renderDataTab();
   updateArchiveBadge();
@@ -506,15 +519,29 @@ function handleImportFile(e) {
   e.target.value = ''; // reset so same file can be re-selected
 }
 
+// ── LOADER ────────────────────────────────────────────────────
+function showLoader(msg = 'Syncing with Sheets…') {
+  const el = document.getElementById('loadingOverlay');
+  if (!el) return;
+  const lbl = el.querySelector('.loading-label');
+  if (lbl) lbl.textContent = msg;
+  el.style.display = 'flex';
+}
+function hideLoader() {
+  const el = document.getElementById('loadingOverlay');
+  if (el) el.style.display = 'none';
+}
+
 // ── GOOGLE SHEETS SYNC ────────────────────────────────────────
 // ── PULL SILENT ──────────────────────────────────────────────
-// Pulls all data from Sheets into memory without showing confirm dialog.
+// Pulls only the active month's data from Sheets (no confirm dialog).
 // Used on app load (online mode) and on month change.
 async function pullSilent() {
   const url = LS.get('budget_sheets_url', '');
   if (!url) return;
   try {
-    const res  = await fetch(`${url}?action=pull`, { method: 'GET', redirect: 'follow' });
+    const monthParam = activeMonth ? `&month=${encodeURIComponent(activeMonth)}` : '';
+    const res  = await fetch(`${url}?action=pull${monthParam}`, { method: 'GET', redirect: 'follow' });
     const json = await res.json();
     if (json.status === 'ok') {
       expenses = (json.expenses || []).map(e => ({ ...e, date: normaliseDate(e.date) }));
@@ -561,15 +588,19 @@ async function pullFromSheets() {
   btn.innerHTML = '<span class="spinning">↻</span> Pulling...';
 
   try {
+    const monthParam = activeMonth ? `&month=${encodeURIComponent(activeMonth)}` : '';
     const res  = await fetch(
-      `${url}?action=pull`,
+      `${url}?action=pull${monthParam}`,
       { method: 'GET', redirect: 'follow' }
     );
     const json = await res.json();
+    const monthLabel = activeMonth
+      ? new Date(activeMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+      : 'all time';
     if (json.status === 'ok' && Array.isArray(json.expenses)) {
       showConfirm(
         '📥 Pull from Sheets',
-        `Found ${json.expenses.length} active + ${(json.archived||[]).length} archived. Local data will be updated.`,
+        `Found ${json.expenses.length} active + ${(json.archived||[]).length} archived for ${monthLabel}. Local data will be updated.`,
         () => {
           // ── Active expenses: update existing, add new ──
           const incoming    = json.expenses.map(e => ({ ...e, date: normaliseDate(e.date) }));
@@ -694,10 +725,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
-on('monthFilter', 'change', e => {
-  activeMonth = e.target.value; renderAll();
-});
-
 // Data tab
 on('exportBtn', 'click', exportData);
 on('importBtn', 'click', triggerImport);
@@ -779,13 +806,25 @@ if ('serviceWorker' in navigator) {
 // ── INIT ──────────────────────────────────────────────────────
 initTheme();
 
-// Build category filter chips dynamically from CATEGORIES
+// Build category filter chips — only for categories present in the active month
 function buildCategoryFilter() {
   const row = document.getElementById('categoryFilterRow');
   if (!row) return;
-  const allBtn = `<button class="chip-btn active" data-cat="all">All</button>`;
-  const catBtns = CATEGORIES.map(cat =>
-    `<button class="chip-btn" data-cat="${cat.id}">${cat.emoji} ${cat.label}</button>`
+
+  // Derive which categories exist in the current month (ignoring any active category filter)
+  const monthExpenses = activeMonth
+    ? expenses.filter(e => e.date.startsWith(activeMonth))
+    : expenses;
+  const presentIds = new Set(monthExpenses.map(e => e.category));
+
+  // If the currently-active category has no data this month, reset to 'all'
+  if (activeCat !== 'all' && !presentIds.has(activeCat)) activeCat = 'all';
+
+  const visibleCats = CATEGORIES.filter(cat => presentIds.has(cat.id));
+
+  const allBtn = `<button class="chip-btn ${activeCat === 'all' ? 'active' : ''}" data-cat="all">All</button>`;
+  const catBtns = visibleCats.map(cat =>
+    `<button class="chip-btn ${activeCat === cat.id ? 'active' : ''}" data-cat="${cat.id}">${cat.emoji} ${cat.label}</button>`
   ).join('');
   row.innerHTML = allBtn + catBtns;
 
@@ -799,20 +838,24 @@ function buildCategoryFilter() {
     });
   });
 }
-buildCategoryFilter();
 
-// Month filter change
+// Month filter change — pass month to Sheets and show loader
 on('monthFilter', 'change', async e => {
   activeMonth = e.target.value;
-  if (isOnlineMode()) await pullSilent();
+  if (isOnlineMode()) {
+    showLoader();
+    await pullSilent();
+    hideLoader();
+  }
   renderAll();
   if (document.getElementById('tab-stats') && document.getElementById('tab-stats').classList.contains('active')) renderStats();
 });
 
 if (isOnlineMode()) {
-  // Online mode: load fresh from Sheets on startup
-  renderAll(); // render with cached data first so UI isn't blank
-  pullSilent().then(() => renderAll());
+  // Online mode: render cached data first so UI isn't blank, then fetch
+  renderAll();
+  showLoader();
+  pullSilent().then(() => { hideLoader(); renderAll(); }).catch(() => hideLoader());
 } else {
   renderAll();
 }
