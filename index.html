@@ -266,5 +266,43 @@
 
   <script src="categories.js"></script>
   <script src="app.js"></script>
+
+  <!-- ── SERVICE WORKER + CACHE CONFIG ──────────────────────────
+       Update CACHE to a new name (e.g. budget-v17) whenever you
+       deploy changes. That's the only value you need to touch.
+       The SW will detect the new name, re-cache all assets, and
+       automatically reload every open tab to pick up the update.
+  ──────────────────────────────────────────────────────────── -->
+  <script>
+    const CACHE = 'budget-v16';
+    const ASSETS = [
+      '/budget/',
+      '/budget/index.html',
+      '/budget/style.css',
+      '/budget/categories.js',
+      '/budget/app.js',
+      '/budget/manifest.json',
+      '/budget/favicon.ico',
+      '/budget/icons/icon-192.png',
+      '/budget/icons/icon-512.png',
+    ];
+
+    if ('serviceWorker' in navigator) {
+      // Listen for the SW's RELOAD signal before registering,
+      // so we never miss it even if it fires quickly.
+      navigator.serviceWorker.addEventListener('message', event => {
+        if (event.data && event.data.type === 'RELOAD') window.location.reload();
+      });
+
+      navigator.serviceWorker.register('/budget/sw.js')
+        .then(() => navigator.serviceWorker.ready)
+        .then(reg => {
+          // Send the current version to the SW.
+          // It will no-op if already cached, or fetch fresh assets + reload if not.
+          reg.active.postMessage({ type: 'CONFIGURE', cache: CACHE, assets: ASSETS });
+        })
+        .catch(() => {});
+    }
+  </script>
 </body>
 </html>

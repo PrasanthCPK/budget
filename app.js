@@ -363,22 +363,22 @@ function saveExpense() {
 
   if (editingId) {
     // Update existing expense
-    expenses = expenses.map(e =>
-      e.id === editingId ? { ...e, title, amount, category: selectedCat, date } : e
-    );
+    const updatedExpense = { ...expenses.find(e => e.id === editingId), title, amount, category: selectedCat, date };
+    expenses = expenses.map(e => e.id === editingId ? updatedExpense : e);
     if (!isOnlineMode()) LS.set('budget_expenses', expenses);
     closeModal();
     renderAll();
     showToast('Expense updated ✓', 'success');
-    autoSync();
+    syncUpsert(updatedExpense);
   } else {
     // Add new expense
-    expenses.unshift({ id: uid(), title, amount, category: selectedCat, date });
+    const newExpense = { id: uid(), title, amount, category: selectedCat, date };
+    expenses.unshift(newExpense);
     if (!isOnlineMode()) LS.set('budget_expenses', expenses);
     closeModal();
     renderAll();
     showToast('Expense added ✓', 'success');
-    autoSync();
+    syncUpsert(newExpense);
   }
 }
 
@@ -389,13 +389,13 @@ function archiveExpense(id) {
   expenses = expenses.filter(e => e.id !== id);
   if (!isOnlineMode()) { LS.set('budget_expenses', expenses); LS.set('budget_archived', archived); }
   renderAll();
-  autoSync();
+  syncUpsert(expense, 'yes');
   showToastWithUndo('Expense archived', () => {
     expenses.unshift(expense);
     archived = archived.filter(e => e.id !== id);
     if (!isOnlineMode()) { LS.set('budget_expenses', expenses); LS.set('budget_archived', archived); }
     renderAll();
-    autoSync();
+    syncUpsert(expense, '');
   });
 }
 
@@ -409,7 +409,7 @@ function restoreExpense(id) {
   renderArchive();
   renderAll();
   showToast('Restored ✓', 'success');
-  autoSync();
+  syncUpsert(clean, '');
 }
 
 function deleteArchived(id) {
@@ -418,7 +418,7 @@ function deleteArchived(id) {
   renderArchive();
   updateArchiveBadge();
   showToast('Permanently deleted');
-  autoSync();
+  syncDelete(id);
 }
 
 function renderArchive() {
@@ -552,28 +552,64 @@ async function pullSilent() {
   } catch { /* silent — app still works from memory */ }
 }
 
-// ── AUTO SYNC ─────────────────────────────────────────────────
-// Called silently after every create/update/archive/restore/delete.
-// Only runs if a Sheets URL is configured. Errors shown as toast.
-async function autoSync() {
-  const url = LS.get('budget_sheets_url', '');
-  if (!url) return; // URL not set — skip silently
+// ── SYNC HELPERS ──────────────────────────────────────────────
+// Each function sends only the affected row — no full rewrites.
 
+function syncBase() { return LS.get('budget_sheets_url', ''); }
+
+function onSyncSuccess() {
+  const ts = new Date().toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  LS.set('budget_last_sync', ts);
+  renderDataTab();
+}
+
+// Add or update one expense row (archivedFlag: '' for active, 'yes' for archived).
+async function syncUpsert(expense, archivedFlag = '') {
+  const url = syncBase();
+  if (!url) return;
   try {
-    const data = encodeURIComponent(JSON.stringify(expenses));
-    const arch = encodeURIComponent(JSON.stringify(archived));
-    const res  = await fetch(
-      `${url}?action=push&data=${data}&arch=${arch}`,
+    const exp = encodeURIComponent(JSON.stringify(expense));
+    const res = await fetch(
+      `${url}?action=upsert&month=${encodeURIComponent(activeMonth)}&expense=${exp}&archived=${archivedFlag}`,
       { method: 'GET', redirect: 'follow' }
     );
     const json = await res.json();
-    if (json.status === 'ok') {
-      const ts = new Date().toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-      LS.set('budget_last_sync', ts);
-      renderDataTab();
-    } else {
-      showToast('Sync failed: ' + (json.message || 'unknown error'), 'error');
-    }
+    if (json.status === 'ok') { onSyncSuccess(); }
+    else { showToast('Sync failed: ' + (json.message || 'unknown error'), 'error'); }
+  } catch {
+    showToast('Sheets sync failed. Check your URL.', 'error');
+  }
+}
+
+// Permanently remove one row by ID.
+async function syncDelete(id) {
+  const url = syncBase();
+  if (!url) return;
+  try {
+    const res = await fetch(
+      `${url}?action=delete&month=${encodeURIComponent(activeMonth)}&id=${encodeURIComponent(id)}`,
+      { method: 'GET', redirect: 'follow' }
+    );
+    const json = await res.json();
+    if (json.status === 'ok') { onSyncSuccess(); }
+    else { showToast('Sync failed: ' + (json.message || 'unknown error'), 'error'); }
+  } catch {
+    showToast('Sheets sync failed. Check your URL.', 'error');
+  }
+}
+
+// Wipe all rows from the active month's sheet.
+async function syncClear() {
+  const url = syncBase();
+  if (!url) return;
+  try {
+    const res = await fetch(
+      `${url}?action=clear&month=${encodeURIComponent(activeMonth)}`,
+      { method: 'GET', redirect: 'follow' }
+    );
+    const json = await res.json();
+    if (json.status === 'ok') { onSyncSuccess(); }
+    else { showToast('Sync failed: ' + (json.message || 'unknown error'), 'error'); }
   } catch {
     showToast('Sheets sync failed. Check your URL.', 'error');
   }
@@ -753,7 +789,7 @@ on('clearDataBtn', 'click', () => {
     LS.set('budget_archived', []);
     renderAll();
     showToast('All data cleared', 'success');
-    autoSync();
+    syncClear();
   });
 });
 
@@ -798,10 +834,6 @@ on('archiveToggleBtn', 'click', () => {
   if (!isOpen) renderArchive();
 });
 
-// ── SERVICE WORKER ────────────────────────────────────────────
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
-}
 
 // ── INIT ──────────────────────────────────────────────────────
 initTheme();
