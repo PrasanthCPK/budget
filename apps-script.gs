@@ -203,6 +203,7 @@ function getOrCreateSheet(month) {
     headerRange.setFontColor('#f0c060');
     headerRange.setFontWeight('bold');
     sheet.setFrozenRows(1);
+    SpreadsheetApp.flush(); // ensure header is committed before getLastRow() is called by caller
   }
   return sheet;
 }

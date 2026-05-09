@@ -355,7 +355,7 @@ function openEditModal(id) {
 
 function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
 
-function saveExpense() {
+async function saveExpense() {
   const title  = document.getElementById('expTitle').value.trim();
   const amount = parseFloat(document.getElementById('expAmount').value);
   const date   = normaliseDate(document.getElementById('expDate').value);
@@ -368,8 +368,12 @@ function saveExpense() {
     if (!isOnlineMode()) LS.set('budget_expenses', expenses);
     closeModal();
     renderAll();
-    showToast('Expense updated ✓', 'success');
-    syncUpsert(updatedExpense);
+    if (isOnlineMode()) {
+      showToast('Saving to Sheets…', 'success');
+      await syncUpsert(updatedExpense);
+    } else {
+      showToast('Expense updated ✓', 'success');
+    }
   } else {
     // Add new expense
     const newExpense = { id: uid(), title, amount, category: selectedCat, date };
@@ -377,8 +381,12 @@ function saveExpense() {
     if (!isOnlineMode()) LS.set('budget_expenses', expenses);
     closeModal();
     renderAll();
-    showToast('Expense added ✓', 'success');
-    syncUpsert(newExpense);
+    if (isOnlineMode()) {
+      showToast('Saving to Sheets…', 'success');
+      await syncUpsert(newExpense);
+    } else {
+      showToast('Expense added ✓', 'success');
+    }
   }
 }
 
@@ -574,10 +582,10 @@ async function syncUpsert(expense, archivedFlag = '') {
       { method: 'GET', redirect: 'follow' }
     );
     const json = await res.json();
-    if (json.status === 'ok') { onSyncSuccess(); }
+    if (json.status === 'ok') { showToast('Saved to Sheets ✓', 'success'); onSyncSuccess(); }
     else { showToast('Sync failed: ' + (json.message || 'unknown error'), 'error'); }
   } catch {
-    showToast('Sheets sync failed. Check your URL.', 'error');
+    showToast('Sheets sync failed — expense kept locally.', 'error');
   }
 }
 
