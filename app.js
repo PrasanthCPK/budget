@@ -899,3 +899,73 @@ if (isOnlineMode()) {
 } else {
   renderAll();
 }
+
+// ── PULL-TO-REFRESH ───────────────────────────────────────────
+// Implements a native-feeling pull-down gesture for iOS PWA (standalone mode),
+// which has no built-in pull-to-refresh unlike Android Chrome.
+(function initPullToRefresh() {
+  const THRESHOLD = 70;
+  const MAX_DRAG  = 110;
+  let startY = 0, dragging = false, refreshing = false;
+
+  const indicator = document.getElementById('pullRefreshIndicator');
+  if (!indicator) return;
+
+  function safeTopPx() {
+    return parseFloat(getComputedStyle(document.documentElement)
+      .getPropertyValue('--safe-top')) || 0;
+  }
+
+  function setPosition(dy) {
+    const clamped = Math.min(dy, MAX_DRAG);
+    const ratio   = Math.min(clamped / THRESHOLD, 1);
+    const ty      = -60 + ratio * (safeTopPx() + 76);
+    indicator.style.transform = `translateX(-50%) translateY(${ty}px)`;
+    indicator.style.opacity   = String(ratio);
+  }
+
+  function resetIndicator() {
+    indicator.style.transition = 'transform 0.3s ease, opacity 0.25s ease';
+    indicator.style.transform  = 'translateX(-50%) translateY(-60px)';
+    indicator.style.opacity    = '0';
+    indicator.classList.remove('spinning');
+  }
+
+  document.addEventListener('touchstart', e => {
+    if (refreshing || window.scrollY > 5) return;
+    if (document.querySelector('.modal-overlay.open')) return;
+    startY   = e.touches[0].clientY;
+    dragging = false;
+    indicator.style.transition = '';
+  }, { passive: true });
+
+  document.addEventListener('touchmove', e => {
+    if (refreshing || window.scrollY > 5) return;
+    if (document.querySelector('.modal-overlay.open')) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0) return;
+    e.preventDefault();
+    dragging = true;
+    setPosition(dy);
+  }, { passive: false });
+
+  document.addEventListener('touchend', async () => {
+    if (!dragging) { resetIndicator(); return; }
+    const shouldRefresh = parseFloat(indicator.style.opacity) >= 1;
+    dragging = false;
+    if (!shouldRefresh) { resetIndicator(); return; }
+
+    refreshing = true;
+    indicator.classList.add('spinning');
+    indicator.style.transition = '';
+    indicator.style.transform  = `translateX(-50%) translateY(${safeTopPx() + 16}px)`;
+    indicator.style.opacity    = '1';
+
+    await pullSilent();
+    renderAll();
+    renderArchive();
+    showToast(LS.get('budget_sheets_url', '') ? 'Synced ✓' : 'Refreshed ✓', 'success');
+
+    setTimeout(() => { resetIndicator(); refreshing = false; }, 400);
+  }, { passive: true });
+})();
